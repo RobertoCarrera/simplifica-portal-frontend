@@ -2,7 +2,6 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { TranslocoModule } from '@jsverse/transloco';
-import { FeedbackButtonComponent } from '../../shared/feedback/feedback-button.component';
 
 // Portal sidebar items - FIXED for client portal (7 items)
 // No module checks, no dynamic loading - hardcoded for security
@@ -19,7 +18,7 @@ const PORTAL_MENU = [
 @Component({
   selector: 'app-portal-sidebar',
   standalone: true,
-  imports: [CommonModule, RouterModule, TranslocoModule, FeedbackButtonComponent],
+  imports: [CommonModule, RouterModule, TranslocoModule],
   template: `
     <aside class="w-64 h-screen bg-slate-900 text-white flex flex-col fixed left-0 top-0">
       <!-- Logo/Brand -->
@@ -47,12 +46,8 @@ const PORTAL_MENU = [
         </ul>
       </nav>
 
-      <!-- Footer -->
-      <div class="p-4 border-t border-slate-700 space-y-1">
-        <!-- Feedback Button -->
-        <app-feedback-button></app-feedback-button>
-
-        <!-- Logout -->
+      <!-- Footer / Logout -->
+      <div class="p-4 border-t border-slate-700">
         <button
           (click)="logout()"
           class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-red-900/30 hover:text-red-400 transition-colors"
