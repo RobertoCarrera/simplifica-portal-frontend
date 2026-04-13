@@ -103,6 +103,7 @@ interface InvoiceDto {
   currency: string | null;
   status: string | null;
   payment_link: string | null;
+  items?: any[];
 }
 
 interface QuoteDto {
@@ -111,7 +112,9 @@ interface QuoteDto {
   title: string | null;
   valid_until: string | null;
   total_amount: number | null;
+  currency: string | null;
   status: string | null;
+  items?: any[];
 }
 
 interface DocumentDto {
@@ -362,7 +365,7 @@ async function handleInvoices(
   const { data: invoices, error } = await admin
     .from('invoices')
     .select(
-      'id, full_invoice_number, invoice_number, invoice_date, due_date, total, currency, status, payment_link_token, payment_link_expires_at',
+      'id, full_invoice_number, invoice_number, invoice_date, due_date, total, currency, status, payment_link_token, payment_link_expires_at, items:invoice_items(*)',
     )
     .eq('client_id', ctx.clientId)
     .eq('company_id', ctx.companyId)
@@ -398,6 +401,7 @@ async function handleInvoices(
       currency: inv.currency ?? null,
       status: inv.status ?? null,
       payment_link: paymentLink,
+      items: inv.items ?? [],
     };
   });
 
@@ -416,7 +420,7 @@ async function handleQuotes(
 ): Promise<Response> {
   const { data: quotes, error } = await admin
     .from('quotes')
-    .select('id, full_quote_number, title, valid_until, total_amount, status')
+    .select('id, full_quote_number, title, valid_until, total_amount, currency, status, quote_date, items:quote_items(*)')
     .eq('client_id', ctx.clientId)
     .eq('company_id', ctx.companyId)
     .neq('status', 'draft')
@@ -434,10 +438,123 @@ async function handleQuotes(
     title: q.title ?? null,
     valid_until: q.valid_until ?? null,
     total_amount: q.total_amount ?? null,
+    currency: q.currency ?? null,
     status: q.status ?? null,
+    items: q.items ?? [],
   }));
 
   return jsonOk({ data: dtos }, corsHeaders);
+}
+
+/**
+ * GET /quotes/:id
+ * Returns a single non-draft quote by ID, scoped to the authenticated client.
+ * Security: requires client_id + company_id match — prevents IDOR.
+ * NEVER returns: cost breakdown, margin, internal notes.
+ */
+async function handleQuoteById(
+  admin: ReturnType<typeof createClient>,
+  ctx: AuthContext,
+  id: string | undefined,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  if (!id) {
+    return jsonError(400, 'Quote ID is required', corsHeaders);
+  }
+
+  const { data: quote, error } = await admin
+    .from('quotes')
+    .select('id, full_quote_number, title, valid_until, total_amount, currency, status, quote_date, items:quote_items(*)')
+    .eq('id', id)
+    .eq('client_id', ctx.clientId)
+    .eq('company_id', ctx.companyId)
+    .neq('status', 'draft')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[client-portal-bff] Quote by ID fetch failed:', error.message);
+    return jsonError(500, 'Failed to fetch quote', corsHeaders);
+  }
+
+  if (!quote) {
+    return jsonError(404, 'Quote not found', corsHeaders);
+  }
+
+  // Explicit DTO mapping — NEVER expose markup, internal notes, cost details
+  const dto: QuoteDto & { items?: any } = {
+    id: quote.id,
+    quote_number: quote.full_quote_number ?? null,
+    title: quote.title ?? null,
+    valid_until: quote.valid_until ?? null,
+    total_amount: quote.total_amount ?? null,
+    status: quote.status ?? null,
+    items: quote.items ?? [],
+  };
+
+  return jsonOk({ data: dto }, corsHeaders);
+}
+
+/**
+ * GET /invoices/:id
+ * Returns a single invoice by ID, scoped to the authenticated client.
+ * Security: requires client_id + company_id match — prevents IDOR.
+ * NEVER returns: IBAN, internal cost data, discount breakdown.
+ */
+async function handleInvoiceById(
+  admin: ReturnType<typeof createClient>,
+  ctx: AuthContext,
+  id: string | undefined,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  if (!id) {
+    return jsonError(400, 'Invoice ID is required', corsHeaders);
+  }
+
+  const { data: invoice, error } = await admin
+    .from('invoices')
+    .select('id, full_invoice_number, invoice_number, invoice_date, due_date, total, currency, status, payment_link_token, payment_link_expires_at, items:invoice_items(*)')
+    .eq('id', id)
+    .eq('client_id', ctx.clientId)
+    .eq('company_id', ctx.companyId)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[client-portal-bff] Invoice by ID fetch failed:', error.message);
+    return jsonError(500, 'Failed to fetch invoice', corsHeaders);
+  }
+
+  if (!invoice) {
+    return jsonError(404, 'Invoice not found', corsHeaders);
+  }
+
+  const PUBLIC_SITE_URL =
+    Deno.env.get('PUBLIC_SITE_URL') ?? 'https://simplifica.digitalizamostupyme.es';
+  const now = new Date();
+
+  // Build payment_link from token if valid and not expired
+  let paymentLink: string | null = null;
+  if (invoice.payment_link_token && invoice.payment_link_expires_at) {
+    const expiresAt = new Date(invoice.payment_link_expires_at);
+    if (expiresAt > now) {
+      paymentLink = `${PUBLIC_SITE_URL}/pago/${invoice.payment_link_token}`;
+    }
+  }
+
+  // Explicit DTO mapping — NEVER expose IBAN, cost breakdown, discount details
+  const dto: InvoiceDto & { items?: any } = {
+    id: invoice.id,
+    invoice_number: invoice.full_invoice_number ?? invoice.invoice_number ?? null,
+    invoice_date: invoice.invoice_date ?? null,
+    due_date: invoice.due_date ?? null,
+    total: invoice.total ?? null,
+    currency: invoice.currency ?? null,
+    status: invoice.status ?? null,
+    payment_link: paymentLink,
+    items: invoice.items ?? [],
+  };
+
+  return jsonOk({ data: dto }, corsHeaders);
 }
 
 /**
@@ -711,7 +828,7 @@ serve(async (req: Request) => {
 
   // ── URL routing ─────────────────────────────────────────────────────────────
   const url = new URL(req.url);
-  // Normalize: strip trailing slash, get last path segment(s)
+  // Normalize: strip trailing slash
   const path = url.pathname.replace(/\/$/, '');
   // Support both /client-portal-bff/profile and /profile
   const route = path.split('/').pop() ?? '';
@@ -719,6 +836,16 @@ serve(async (req: Request) => {
   try {
     // GET routes
     if (req.method === 'GET') {
+      // Handle /quotes/:id and /invoices/:id (must check before switch since /quotes/:id would route='id')
+      if (route === 'quotes' && path.includes('/quotes/')) {
+        const id = path.split('/quotes/')[1];
+        return await handleQuoteById(admin, ctx, id, corsHeaders);
+      }
+      if (route === 'invoices' && path.includes('/invoices/')) {
+        const id = path.split('/invoices/')[1];
+        return await handleInvoiceById(admin, ctx, id, corsHeaders);
+      }
+
       switch (route) {
         case 'profile':
           return await handleProfile(admin, ctx, corsHeaders);

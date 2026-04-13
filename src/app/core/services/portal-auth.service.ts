@@ -341,4 +341,22 @@ export class PortalAuthService implements IPortalAuth {
   get client(): SupabaseClient {
     return this.supabase;
   }
+
+  /**
+   * Get the Supabase URL (used for BFF fetch calls).
+   */
+  get supabaseUrl(): string {
+    // Access via bracket notation to avoid TS protected-member error
+    // The property exists at runtime on SupabaseClient instance
+    return (this.supabase as any)['supabaseUrl'] as string;
+  }
+
+  /**
+   * Get the Supabase anon key (used for BFF fetch calls).
+   */
+  get supabaseKey(): string {
+    // Access via bracket notation to avoid TS protected-member error
+    // The property exists at runtime on SupabaseClient instance
+    return (this.supabase as any)['supabaseKey'] as string;
+  }
 }

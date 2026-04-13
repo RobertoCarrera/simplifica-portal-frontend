@@ -64,20 +64,26 @@ export class ClientPortalService {
   }
 
   async listQuotes(): Promise<{ data: any[]; error?: any }> {
-    const user = await this.auth.getCurrentClient();
-    if (!user?.client_id) return { data: [], error: "No client context" };
-
     try {
-      const { data, error } = await this.supabase
-        .from("quotes")
-        .select("*")
-        .eq("client_id", user.client_id)
-        .neq("status", "cancelled")
-        .order("quote_date", { ascending: false })
-        .limit(200);
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-bff/quotes';
 
-      if (error) throw error;
-      return { data: (data || []) as any, error: null };
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`quotes BFF returned ${res.status}`);
+      }
+
+      const json = await res.json();
+      return { data: json?.data ?? [], error: null };
     } catch (e: any) {
       return {
         data: [],
@@ -88,17 +94,26 @@ export class ClientPortalService {
 
   async getQuote(id: string): Promise<{ data: any | null; error?: any }> {
     try {
-      const { data, error } = await this.supabase
-        .from("quotes")
-        .select(
-          "id, full_quote_number, title, status, quote_date, valid_until, total_amount, currency, items:quote_items(*)",
-        )
-        .eq("id", id)
-        .maybeSingle();
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + `/functions/v1/client-portal-bff/quotes/${id}`;
 
-      if (error) throw error;
-      if (!data) return { data: null, error: "Quote not found" };
-      return { data: data || null, error: null };
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        if (res.status === 404) return { data: null, error: "Quote not found" };
+        throw new Error(`quote BFF returned ${res.status}`);
+      }
+
+      const json = await res.json();
+      return { data: json?.data ?? null, error: null };
     } catch (e: any) {
       return {
         data: null,
@@ -108,21 +123,26 @@ export class ClientPortalService {
   }
 
   async listInvoices(): Promise<{ data: any[]; error?: any }> {
-    const user = await this.auth.getCurrentClient();
-    if (!user?.client_id) return { data: [], error: "No client context" };
-
     try {
-      const { data, error } = await this.supabase
-        .from("invoices")
-        .select("*")
-        .eq("client_id", user.client_id)
-        .neq("status", "void")
-        .neq("status", "cancelled")
-        .order("invoice_date", { ascending: false })
-        .limit(200);
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-bff/invoices';
 
-      if (error) throw error;
-      return { data: (data || []) as any, error: null };
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`invoices BFF returned ${res.status}`);
+      }
+
+      const json = await res.json();
+      return { data: json?.data ?? [], error: null };
     } catch (e: any) {
       return {
         data: [],
@@ -133,15 +153,26 @@ export class ClientPortalService {
 
   async getInvoice(id: string): Promise<{ data: any | null; error?: any }> {
     try {
-      const { data, error } = await this.supabase
-        .from("invoices")
-        .select("*, items:invoice_items(*)")
-        .eq("id", id)
-        .maybeSingle();
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + `/functions/v1/client-portal-bff/invoices/${id}`;
 
-      if (error) throw error;
-      if (!data) return { data: null, error: "Invoice not found" };
-      return { data: data, error: null };
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        if (res.status === 404) return { data: null, error: "Invoice not found" };
+        throw new Error(`invoice BFF returned ${res.status}`);
+      }
+
+      const json = await res.json();
+      return { data: json?.data ?? null, error: null };
     } catch (e: any) {
       return {
         data: null,
@@ -224,32 +255,6 @@ export class ClientPortalService {
   }
 
   /**
-   * GET /modules via the BFF
-   * Returns the list of active module keys for the client's company.
-   */
-  async getActiveModules(): Promise<string[]> {
-    try {
-      const token = await this.requireAccessToken();
-      const { data, error } = await this.supabase.functions.invoke(
-        'client-portal-bff',
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          // Supabase functions.invoke prefixes the path automatically
-          // We need /modules which maps to /client-portal-bff/modules
-        },
-      );
-      if (error) throw error;
-      return (data?.data?.modules ?? []) as string[];
-    } catch (e: any) {
-      console.error('[ClientPortalService] getActiveModules failed:', e?.message);
-      return [];
-    }
-  }
-
-  /**
    * GET /modules via the BFF (client-portal-bff)
    * Returns the list of active module keys for the client's company.
    * Uses direct fetch to allow GET on the edge function.
@@ -257,8 +262,8 @@ export class ClientPortalService {
   async getActiveModules(): Promise<string[]> {
     try {
       const token = await this.requireAccessToken();
-      const anonKey = this.auth.client.supabaseKey;
-      const bffUrl = this.auth.client.supabaseUrl + '/functions/v1/client-portal-bff/modules';
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-bff/modules';
 
       const res = await fetch(bffUrl, {
         method: 'GET',
