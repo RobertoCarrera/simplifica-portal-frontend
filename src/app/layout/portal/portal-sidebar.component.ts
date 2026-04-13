@@ -1,15 +1,23 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { TranslocoModule } from '@jsverse/transloco';
+import { ClientPortalService } from '../../core/services/client-portal.service';
 
-// Portal sidebar items - FIXED for client portal (6 items, settings moved to footer)
-// No module checks, no dynamic loading - hardcoded for security
-const PORTAL_MENU = [
+export interface MenuItem {
+  id: number;
+  label: string;
+  icon: string;
+  route: string;
+  moduleKey?: string; // if set, item is shown only when module is active
+}
+
+// All possible menu items with their required module (if any)
+const ALL_MENU_ITEMS: MenuItem[] = [
   { id: 1, label: 'portal.menu.dashboard', icon: 'fa-home', route: '/dashboard' },
-  { id: 2, label: 'portal.menu.appointments', icon: 'fa-calendar', route: '/citas' },
-  { id: 3, label: 'portal.menu.quotes', icon: 'fa-file-invoice', route: '/presupuestos' },
-  { id: 4, label: 'portal.menu.invoices', icon: 'fa-file-invoice-dollar', route: '/facturas' },
+  { id: 2, label: 'portal.menu.appointments', icon: 'fa-calendar', route: '/citas', moduleKey: 'moduloReservas' },
+  { id: 3, label: 'portal.menu.quotes', icon: 'fa-file-invoice', route: '/presupuestos', moduleKey: 'moduloPresupuestos' },
+  { id: 4, label: 'portal.menu.invoices', icon: 'fa-file-invoice-dollar', route: '/facturas', moduleKey: 'moduloFacturas' },
   { id: 5, label: 'portal.menu.services', icon: 'fa-tools', route: '/servicios' },
   { id: 6, label: 'portal.menu.devices', icon: 'fa-mobile-alt', route: '/dispositivos' },
 ];
@@ -29,7 +37,7 @@ const PORTAL_MENU = [
       <!-- Navigation -->
       <nav class="flex-1 py-4 overflow-y-auto">
         <ul class="space-y-1 px-3">
-          @for (item of menuItems; track item.id) {
+          @for (item of menuItems(); track item.id) {
             <li>
               <a
                 [routerLink]="item.route"
@@ -69,9 +77,27 @@ const PORTAL_MENU = [
     </aside>
   `,
 })
-export class PortalSidebarComponent {
+export class PortalSidebarComponent implements OnInit {
   private router = inject(Router);
-  menuItems = PORTAL_MENU;
+  private clientPortal = inject(ClientPortalService);
+
+  menuItems = signal<MenuItem[]>(ALL_MENU_ITEMS);
+
+  ngOnInit() {
+    this.loadModules();
+  }
+
+  private async loadModules() {
+    const activeModules = await this.clientPortal.getActiveModules();
+
+    // Filter items: those without moduleKey are always shown;
+    // those with moduleKey are shown only when the module is active
+    const filtered = ALL_MENU_ITEMS.filter(
+      (item) => !item.moduleKey || activeModules.includes(item.moduleKey),
+    );
+
+    this.menuItems.set(filtered);
+  }
 
   logout() {
     this.router.navigate(['/login']);
