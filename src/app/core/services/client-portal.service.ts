@@ -222,4 +222,62 @@ export class ClientPortalService {
       .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'quotes', filter }, callback)
       .subscribe();
   }
+
+  /**
+   * GET /modules via the BFF
+   * Returns the list of active module keys for the client's company.
+   */
+  async getActiveModules(): Promise<string[]> {
+    try {
+      const token = await this.requireAccessToken();
+      const { data, error } = await this.supabase.functions.invoke(
+        'client-portal-bff',
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          // Supabase functions.invoke prefixes the path automatically
+          // We need /modules which maps to /client-portal-bff/modules
+        },
+      );
+      if (error) throw error;
+      return (data?.data?.modules ?? []) as string[];
+    } catch (e: any) {
+      console.error('[ClientPortalService] getActiveModules failed:', e?.message);
+      return [];
+    }
+  }
+
+  /**
+   * GET /modules via the BFF (client-portal-bff)
+   * Returns the list of active module keys for the client's company.
+   * Uses direct fetch to allow GET on the edge function.
+   */
+  async getActiveModules(): Promise<string[]> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.client.supabaseKey;
+      const bffUrl = this.auth.client.supabaseUrl + '/functions/v1/client-portal-bff/modules';
+
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`modules endpoint returned ${res.status}`);
+      }
+
+      const json = await res.json();
+      return (json?.data?.modules ?? []) as string[];
+    } catch (e: any) {
+      console.error('[ClientPortalService] getActiveModules failed:', e?.message);
+      return [];
+    }
+  }
 }

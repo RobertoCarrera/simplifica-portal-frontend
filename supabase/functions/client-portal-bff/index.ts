@@ -732,6 +732,9 @@ serve(async (req: Request) => {
         case 'quotes':
           return await handleQuotes(admin, ctx, corsHeaders);
 
+        case 'modules':
+          return await handleModules(admin, ctx, corsHeaders);
+
         case 'documents':
           return await handleDocuments(admin, ctx, corsHeaders);
 
@@ -757,3 +760,29 @@ serve(async (req: Request) => {
     return jsonError(500, 'Internal server error', corsHeaders);
   }
 });
+
+/**
+ * GET /modules
+ * Returns the list of active modules for the client's company.
+ * Scoped by company_id — clients only see modules from their own company.
+ * Used by the portal sidebar to show/hide menu items based on company config.
+ */
+async function handleModules(
+  admin: ReturnType<typeof createClient>,
+  ctx: AuthContext,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const { data, error } = await admin
+    .from('company_modules')
+    .select('module_key, status')
+    .eq('company_id', ctx.companyId)
+    .eq('status', 'active');
+
+  if (error) {
+    console.error('[client-portal-bff] Modules fetch failed:', error?.message);
+    return jsonError(500, 'Failed to fetch modules', corsHeaders);
+  }
+
+  const activeModules = (data ?? []).map((row) => row.module_key);
+  return jsonOk({ data: { modules: activeModules } }, corsHeaders);
+}
