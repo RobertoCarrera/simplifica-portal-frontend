@@ -48,11 +48,9 @@ export class ClientPortalAdminComponent {
 
   async save() {
     // STUB: Phase 5 - complete upsert mapping
-    console.log("Save mapping:", this.form);
   }
 
   async remove(id: string) {
     // STUB: Phase 5 - complete delete mapping
-    console.log("Remove mapping:", id);
   }
 }

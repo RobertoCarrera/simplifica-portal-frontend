@@ -7,7 +7,6 @@ import {
 import { provideRouter } from "@angular/router";
 import {
   provideHttpClient,
-  withInterceptorsFromDi,
 } from "@angular/common/http";
 import { provideAnimations } from "@angular/platform-browser/animations";
 import { PORTAL_ROUTES } from "./portal.routes";
@@ -22,7 +21,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(PORTAL_ROUTES),
-    provideHttpClient(withInterceptorsFromDi()),
+    provideHttpClient(),
     provideAnimations(),
     {
       provide: APP_INITIALIZER,
