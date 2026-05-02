@@ -8,8 +8,8 @@
 //   2. Rate limiting: 60 req/min per authenticated user (user ID-keyed)
 //   3. Auth: validate JWT via service_role admin.auth.getUser() — NOT by decoding JWT claims directly
 //   4. Role check: user_role === 'client' from app_metadata or user_metadata
-//   5. Client identity: service_role admin queries clients.auth_user_id for data queries
-//      (RLS on clients/invoices/quotes/bookings/client_documents doesn't have client-scoped policies yet)
+//   5. Client identity: resolved via client_portal_users(auth_user_id → client_id + company_id).
+//      All data queries are filtered by client_id + company_id (service_role bypasses RLS, so we enforce at query level).
 //   6. DTO mapping: strict explicit field whitelists — no spread, no extra fields
 //
 // Routes (all require authenticated client JWT):
@@ -200,40 +200,33 @@ async function authenticate(
     return jsonError(403, 'Access denied: client role required', corsHeaders);
   }
 
-  // Resolve client record.
-  // Strategy: filter by auth_user_id + company_id from JWT (most accurate).
-  // If not found or inactive, fall back to the first active client record for this user.
-  // This handles edge cases where a user is a client in multiple companies.
+  // Resolve client record via client_portal_users.
+  // Primary strategy: look up by auth_user_id + jwt company_id (most accurate).
+  // Fallback: look up by auth_user_id alone, then validate company_id from jwt.
+  // client_portal_users.client_id is NOT NULL (enforced by migration), so every portal user maps to exactly one client.
   let clientRow: { id: string; company_id: string; is_active: boolean } | null = null;
 
-  if (jwtCompanyId) {
-    const { data: exactMatch } = await admin
+  // Try via client_portal_users first — it has (auth_user_id, client_id, company_id)
+  const { data: portalUser } = await admin
+    .from('client_portal_users')
+    .select('client_id, company_id')
+    .eq('auth_user_id', user.id)
+    .maybeSingle();
+
+  if (portalUser) {
+    // jwtCompanyId provides authoritative company isolation; validate against it
+    if (jwtCompanyId && portalUser.company_id !== jwtCompanyId) {
+      console.error('[client-portal-bff] JWT company_id mismatch:', user.id, jwtCompanyId, portalUser.company_id);
+      return jsonError(403, 'Access denied: company mismatch', corsHeaders);
+    }
+    const { data: client } = await admin
       .from('clients')
       .select('id, company_id, is_active')
-      .eq('auth_user_id', user.id)
-      .eq('company_id', jwtCompanyId)
+      .eq('id', portalUser.client_id)
       .maybeSingle();
-
-    if (exactMatch?.is_active) {
-      clientRow = exactMatch as typeof clientRow;
+    if (client?.is_active) {
+      clientRow = client as typeof clientRow;
     }
-  }
-
-  if (!clientRow) {
-    // Fallback: first active client record for this auth user
-    const { data: activeClients, error: clientError } = await admin
-      .from('clients')
-      .select('id, company_id, is_active')
-      .eq('auth_user_id', user.id)
-      .eq('is_active', true)
-      .limit(1);
-
-    if (clientError) {
-      console.error('[client-portal-bff] Client lookup failed:', clientError?.message);
-      return jsonError(403, 'Client account not found', corsHeaders);
-    }
-
-    clientRow = (activeClients?.[0] as typeof clientRow) ?? null;
   }
 
   if (!clientRow) {
