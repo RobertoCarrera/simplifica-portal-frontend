@@ -1,5 +1,3 @@
-import { Address } from "./address";
-
 export interface Customer {
   _id?: string;
   id: string;
@@ -23,7 +21,7 @@ export interface Customer {
   telefono?: string;
   email: string;
   direccion_id?: string;
-  direccion?: Address;
+  direccion?: any;
   avatar_url?: string;
   favicon?: string | null;
   usuario_id: string;

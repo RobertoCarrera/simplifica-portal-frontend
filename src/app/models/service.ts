@@ -1,6 +1,3 @@
-import { Product } from "./product";
-import { Work } from "./work";
-
 export interface Service {
 
     _id: string,
@@ -10,7 +7,7 @@ export interface Service {
     servicio_id: string[],
     producto_id: string[],
     ticket_id: string,
-    servicio: Work,
-    producto: Product | null,
+    servicio: any,
+    producto: any | null,
     finalizado: boolean
 }

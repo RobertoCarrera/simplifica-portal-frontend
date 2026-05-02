@@ -2,7 +2,6 @@ import { Component, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ClientPortalService } from "../../../core/services/client-portal.service";
-import { IPortalAuth } from "../../../core/ports/iportal-auth";
 
 @Component({
   selector: "app-client-portal-admin",
@@ -33,7 +32,6 @@ import { IPortalAuth } from "../../../core/ports/iportal-auth";
 })
 export class ClientPortalAdminComponent {
   private portal = inject(ClientPortalService);
-  private auth = inject(IPortalAuth);
 
   mappings: any[] = [];
   loading = signal(false);
@@ -41,8 +39,8 @@ export class ClientPortalAdminComponent {
 
   async reload() {
     this.loading.set(true);
-    const { data } = await this.portal.listMappings();
-    this.mappings = data || [];
+    // TODO: Phase 5 — implement via Edge Function bridge to CRM
+    this.mappings = [];
     this.loading.set(false);
   }
 

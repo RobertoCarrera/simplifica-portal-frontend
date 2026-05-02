@@ -1,11 +1,9 @@
-import { Address } from "./address";
-
 export interface Company {
 
   _id: string,
   created_at: Date,
   nombre: string,
-  direccion_id: Address,
+  direccion_id: any,
   cif: string,
   telefono: string,
   email: string,

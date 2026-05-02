@@ -1,6 +1,5 @@
 import { Customer } from "./customer";
 import { Service } from "./service";
-import { TicketsStage } from "./tickets-stage";
 
 export interface Ticket {
 
@@ -12,6 +11,6 @@ export interface Ticket {
     comentarios: string[],
     fecha_vencimiento: Date,
     cliente: Customer,
-    estado: TicketsStage,
+    estado: any,
     servicios: Service[]
 }

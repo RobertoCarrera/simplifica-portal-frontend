@@ -14,9 +14,9 @@ import { firstValueFrom } from 'rxjs';
 import {
   GdprComplianceService,
   GdprConsentRecord,
-} from '../../../../services/gdpr-compliance.service';
-import { ToastService } from '../../../../services/toast.service';
-import { AuthService } from '../../../../services/auth.service';
+} from '@shared/services/gdpr-compliance.service';
+import { ToastService } from '@shared/services/toast.service';
+import { PortalAuthService as AuthService } from '@core/services/portal-auth.service';
 
 /**
  * ConsentGateComponent — Task 1.5 (pentest-audit-clients-table-remediation)
@@ -228,15 +228,14 @@ export class ConsentGateComponent implements OnInit {
    */
   async checkExistingConsent(): Promise<void> {
     try {
-      const consents = await firstValueFrom(this.gdprService.getConsentRecords(this.clientEmail));
+      const consents = (await firstValueFrom(this.gdprService.getConsentRecords(this.clientEmail))) as GdprConsentRecord[];
 
       // Map consentType to the GdprConsentRecord type values
       const targetConsentType: GdprConsentRecord['consent_type'] =
         this.consentType === 'health_data' ? 'health_data' : 'data_processing';
 
-      const records = consents as GdprConsentRecord[];
-      const activeConsent = records?.find(
-        (c: GdprConsentRecord) =>
+      const activeConsent = consents?.find(
+        (c) =>
           c.consent_type === targetConsentType &&
           c.consent_given &&
           !c.withdrawn_at &&
@@ -268,7 +267,7 @@ export class ConsentGateComponent implements OnInit {
     this.syncLoading.emit(true);
 
     try {
-      const companyId = this.resolveCompanyId();
+      const companyId = await this.resolveCompanyId();
       if (!companyId) {
         this.errorMessage.set(
           'No se pudo determinar la empresa. Recarga la página e intenta de nuevo.',
@@ -331,11 +330,11 @@ export class ConsentGateComponent implements OnInit {
   // ── Private helpers ────────────────────────────────────────────────────────
 
   /**
-   * Synchronously resolves the company ID from the auth service signal.
-   * Uses the signal (not Observable) so no async is needed.
+   * Resolves the company ID from the current portal client.
+   * Uses getCurrentClient() which is the supported way to access company_id.
    */
-  private resolveCompanyId(): string | null {
-    const id = this.authService.companyId();
-    return id || null;
+  private async resolveCompanyId(): Promise<string | null> {
+    const client = await this.authService.getCurrentClient();
+    return client?.company_id || null;
   }
 }
