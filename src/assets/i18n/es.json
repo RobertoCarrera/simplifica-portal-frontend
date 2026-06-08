@@ -1,4 +1,29 @@
 {
+  "nav": {
+    "inicio": "Inicio",
+    "notificaciones": "Notificaciones",
+    "tickets": "Tickets",
+    "presupuestos": "Presupuestos",
+    "facturas": "Facturas",
+    "servicios": "Servicios",
+    "dispositivos": "Dispositivos",
+    "proyectos": "Proyectos",
+    "chat": "Chat",
+    "reservas": "Reservas",
+    "configuracion": "Configuración"
+  },
+  "portal": {
+    "menu": {
+      "dashboard": "Dashboard",
+      "appointments": "Citas",
+      "quotes": "Presupuestos",
+      "invoices": "Facturas",
+      "services": "Servicios",
+      "devices": "Dispositivos",
+      "settings": "Configuración",
+      "logout": "Cerrar sesión"
+    }
+  },
   "cookie": {
     "title": "Usamos cookies",
     "description": "Algunas cookies son necesarias para el funcionamiento del sitio. Otras son opcionales y nos ayudan a mejorar.",

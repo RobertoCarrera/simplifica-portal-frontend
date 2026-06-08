@@ -1,172 +1,90 @@
-// Global styles for Simplify Portal
-// This file is imported by angular.json
+@use "@angular/cdk/overlay-prebuilt.css";
+@use "@fontsource-variable/inter";
 
-// CSS Custom Properties for theming
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Variables CSS para temas dinámicos */
 :root {
-  --color-primary: #2563eb;
-  --color-primary-dark: #1d4ed8;
-  --color-primary-light: #3b82f6;
-  --color-secondary: #64748b;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
+  /* Viewport height for mobile Safari */
+  --vh: 1vh;
 
-  --font-family:
-    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Colores base */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+  --shadow-color: rgba(0, 0, 0, 0.1);
 
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  /* Esquema de colores por defecto (indigo) */
+  --color-primary-50: #eef2ff;
+  --color-primary-100: #e0e7ff;
+  --color-primary-200: #c7d2fe;
+  --color-primary-300: #a5b4fc;
+  --color-primary-400: #818cf8;
+  --color-primary-500: #6366f1;
+  --color-primary-600: #4f46e5;
+  --color-primary-700: #4338ca;
+  --color-primary-800: #3730a3;
+  --color-primary-900: #312e81;
 }
 
-// Base styles
-* {
-  box-sizing: border-box;
+/* Tema oscuro (Clase manual) */
+.dark {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --border-color: #475569;
+  --shadow-color: rgba(0, 0, 0, 0.3);
 }
 
+/* Base typography */
 html,
 body {
   height: 100%;
+  font-family: "Inter Variable", sans-serif;
   margin: 0;
-  font-family: var(--font-family);
-  font-size: 16px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  padding: 0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  touch-action: manipulation;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
 }
 
-// Utility classes
-.text-center {
-  text-align: center;
-}
-.text-right {
-  text-align: right;
-}
-.text-left {
-  text-align: left;
+* { box-sizing: border-box; }
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-.flex {
-  display: flex;
-}
-.flex-col {
-  flex-direction: column;
-}
-.items-center {
-  align-items: center;
-}
-.justify-center {
-  justify-content: center;
-}
-.justify-between {
-  justify-content: space-between;
-}
-.gap-1 {
-  gap: 0.25rem;
-}
-.gap-2 {
-  gap: 0.5rem;
-}
-.gap-3 {
-  gap: 0.75rem;
-}
-.gap-4 {
-  gap: 1rem;
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
 }
 
-// Spacing
-.p-2 {
-  padding: 0.5rem;
-}
-.p-3 {
-  padding: 0.75rem;
-}
-.p-4 {
-  padding: 1rem;
-}
-.p-6 {
-  padding: 1.5rem;
-}
-.m-0 {
-  margin: 0;
-}
-.mt-2 {
-  margin-top: 0.5rem;
-}
-.mt-4 {
-  margin-top: 1rem;
-}
-.mb-2 {
-  margin-bottom: 0.5rem;
-}
-.mb-4 {
-  margin-bottom: 1rem;
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
 }
 
-// Card component base
-.card {
-  background: white;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  padding: var(--p-4, 1rem);
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
-// Typography
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  margin: 0;
-  font-weight: 600;
-  line-height: 1.25;
+/* Hide scrollbars globally while keeping functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
-
-h1 {
-  font-size: 2rem;
-}
-h2 {
-  font-size: 1.5rem;
-}
-h3 {
-  font-size: 1.25rem;
-}
-h4 {
-  font-size: 1.125rem;
-}
-
-// Status badges
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.badge-success {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.badge-warning {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.badge-danger {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.badge-info {
-  background: #dbeafe;
-  color: #1e40af;
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

@@ -80,7 +80,12 @@ export class PortalAuthService implements IPortalAuth {
       return;
     }
 
-    this.supabase = createClient(supabaseUrl, supabaseAnonKey);
+    this.supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+    });
 
     // Initialize auth state
     this.initializeAuth();
@@ -143,44 +148,53 @@ export class PortalAuthService implements IPortalAuth {
 
   private async fetchPortalUser(user: User): Promise<PortalClientUser | null> {
     try {
-      // First, get the client portal user record
-      const { data: portalUser, error } = await this.supabase
-        .from("client_portal_users")
-        .select("*, client:clients(*)")
-        .eq("auth_user_id", user.id)
-        .eq("is_active", true)
-        .maybeSingle();
+      // Use the get-portal-user edge function instead of PostgREST directly.
+      //
+      // Why an edge function: the portal project's PostgREST schema cache is
+      // stale and does not include the clients/users/companies tables, so any
+      // embed like `client_portal_users?select=*,client:clients(*)` fails with
+      // PGRST200 "Could not find a relationship". The PortalRoleGuard then
+      // sees a null portalUser and bounces the user back to /login in a loop.
+      // The edge function uses service_role to do the join server-side and
+      // returns the joined object the frontend expects.
+      const cfg = this.runtimeConfig.getSupabase();
+      const supabaseUrl = cfg?.url?.trim() || environment.supabase.url;
+      const anonKey = cfg?.anonKey?.trim() || environment.supabase.anonKey;
+      const fnUrl = `${supabaseUrl}/functions/v1/get-portal-user`;
 
-      if (error || !portalUser) {
+      const session = await this.supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) {
+        console.warn("⚠️ PortalAuth: no access token available");
+        return null;
+      }
+
+      const res = await fetch(fnUrl, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+        },
+      });
+
+      if (res.status === 404) {
         console.warn(
-          "⚠️ PortalAuth: client_portal_users not found for:",
+          "⚠️ PortalAuth: No portal user found for auth user:",
           user.id,
         );
         return null;
       }
+      if (!res.ok) {
+        console.warn(
+          "⚠️ PortalAuth: get-portal-user failed:",
+          res.status,
+          await res.text(),
+        );
+        return null;
+      }
 
-      // Get user details from public.users
-      const { data: appUser } = await this.supabase
-        .from("users")
-        .select("*")
-        .eq("id", portalUser.user_id || portalUser.client_id)
-        .maybeSingle();
-
-      // Build the portal user object
-      return {
-        id: appUser?.id || portalUser.user_id || portalUser.client_id,
-        client_id: portalUser.client_id,
-        company_id: portalUser.company_id,
-        auth_user_id: user.id,
-        email: user.email || portalUser.email,
-        name: appUser?.name || null,
-        surname: appUser?.surname || null,
-        full_name: appUser
-          ? `${appUser.name || ""} ${appUser.surname || ""}`.trim()
-          : null,
-        role: "client",
-        is_active: portalUser.is_active,
-      };
+      const portalUser = (await res.json()) as PortalClientUser;
+      return portalUser;
     } catch (error) {
       console.warn("⚠️ PortalAuth: Error fetching portal user:", error);
       return null;

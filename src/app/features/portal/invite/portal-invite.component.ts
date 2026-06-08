@@ -264,16 +264,35 @@ export class PortalInviteComponent {
     }
   }
 
+  private redirectToLogin(returnUrl: string): void {
+    this.router.navigate(['/login'], {
+      queryParams: { returnUrl },
+    });
+  }
+
+  private buildReturnUrl(): string {
+    const token = this.route.snapshot.queryParamMap.get('token');
+    return `/invite?token=${token || ''}`;
+  }
+
   async accept() {
     const token = this.route.snapshot.queryParamMap.get('token');
+    if (!token) return;
+
+    // FIX #1 + #2: Get current user (must await since getCurrentClient is async)
+    // FIX #2: Verify authentication before proceeding
     const user = await this.currentUser;
+    if (!user) {
+      this.redirectToLogin(this.buildReturnUrl());
+      return;
+    }
 
     this.state.set('accepting');
     try {
       const { data, error } = await this.supabase.functions.invoke('accept-invitation', {
         body: {
           token: token,
-          user_id: user?.id,
+          user_id: user.id,
         },
       });
 
@@ -294,6 +313,14 @@ export class PortalInviteComponent {
 
   async reject() {
     const token = this.route.snapshot.queryParamMap.get('token');
+    if (!token) return;
+
+    // FIX #2: Verify authentication before proceeding (reject-invitation also requires JWT)
+    const user = await this.currentUser;
+    if (!user) {
+      this.redirectToLogin(this.buildReturnUrl());
+      return;
+    }
 
     this.state.set('rejecting');
     try {
@@ -302,6 +329,12 @@ export class PortalInviteComponent {
           token: token,
         },
       });
+
+      if (error || !data?.success) {
+        this.state.set('details');
+        this.errorMessage.set(data?.error || 'Failed to reject invitation');
+        return;
+      }
 
       this.state.set('rejected');
     } catch (e) {

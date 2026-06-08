@@ -6,6 +6,7 @@ export interface PortalClientUser {
   id: string; // Internal user id (public.users.id)
   client_id: string; // Client id from clients table
   company_id: string; // Company identifier
+  company_name?: string | null; // Company display name (e.g. "Puchu Studios SL")
   auth_user_id: string; // Supabase Auth user id
   email: string;
   name?: string | null;

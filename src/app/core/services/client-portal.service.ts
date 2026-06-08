@@ -54,13 +54,32 @@ export class ClientPortalService {
   }
 
   async listTickets(): Promise<{ data: any[]; error?: any }> {
-    const client = this.auth.client;
-    const { data, error } = await client
-      .from("client_visible_tickets")
-      .select("*")
-      .order("updated_at", { ascending: false })
-      .limit(200);
-    return { data: (data || []) as any, error };
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-bff/tickets';
+
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`tickets BFF returned ${res.status}`);
+      }
+
+      const json = await res.json();
+      return { data: json?.data ?? [], error: null };
+    } catch (e: any) {
+      return {
+        data: [],
+        error: { message: e?.message || "listTickets failed" },
+      };
+    }
   }
 
   async listQuotes(): Promise<{ data: any[]; error?: any }> {
@@ -231,16 +250,9 @@ export class ClientPortalService {
   async markTicketOpened(
     ticketId: string,
   ): Promise<{ success: boolean; error?: string }> {
-    try {
-      const { error } = await this.supabase
-        .from("tickets")
-        .update({ is_opened: true })
-        .eq("id", ticketId);
-      if (error) return { success: false, error: error.message };
-      return { success: true };
-    } catch (e: any) {
-      return { success: false, error: e.message };
-    }
+    // Portal does not have a tickets table — markTicketOpened is a no-op
+    // The ticket visibility is controlled by client_visible_tickets sync
+    return { success: true };
   }
 
   async subscribeToClientQuotes(
@@ -279,7 +291,9 @@ export class ClientPortalService {
       }
 
       const json = await res.json();
-      return (json?.data?.modules ?? []) as string[];
+      // BFF v13 returns { modules: [...] } directly (not { data: { modules: [...] } })
+      const modules = json?.data?.modules ?? json?.modules ?? json?.data ?? [];
+      return (Array.isArray(modules) ? modules : []) as string[];
     } catch (e: any) {
       console.error('[ClientPortalService] getActiveModules failed:', e?.message);
       return [];

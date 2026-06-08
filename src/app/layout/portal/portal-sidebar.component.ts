@@ -1,7 +1,29 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, OnInit, inject, signal, HostListener, computed } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
-import { TranslocoModule } from '@jsverse/transloco';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import {
+  LucideAngularModule,
+  LUCIDE_ICONS,
+  LucideIconProvider,
+  Home,
+  Bell,
+  Ticket,
+  FileText,
+  Receipt,
+  Wrench,
+  Settings,
+  LogOut,
+  Smartphone,
+  Calendar,
+  LayoutGrid,
+  MessageCircle,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-angular';
+import { SidebarStateService } from '../../core/services/sidebar-state.service';
+import { PortalAuthService } from '../../core/services/portal-auth.service';
 import { ClientPortalService } from '../../core/services/client-portal.service';
 
 export interface MenuItem {
@@ -9,97 +31,187 @@ export interface MenuItem {
   label: string;
   icon: string;
   route: string;
-  moduleKey?: string; // if set, item is shown only when module is active
+  moduleKey?: string;
 }
-
-// All possible menu items with their required module (if any)
-const ALL_MENU_ITEMS: MenuItem[] = [
-  { id: 1, label: 'portal.menu.dashboard', icon: 'fa-home', route: '/dashboard' },
-  { id: 2, label: 'portal.menu.appointments', icon: 'fa-calendar', route: '/citas', moduleKey: 'moduloReservas' },
-  { id: 3, label: 'portal.menu.quotes', icon: 'fa-file-invoice', route: '/presupuestos', moduleKey: 'moduloPresupuestos' },
-  { id: 4, label: 'portal.menu.invoices', icon: 'fa-file-invoice-dollar', route: '/facturas', moduleKey: 'moduloFacturas' },
-  { id: 5, label: 'portal.menu.services', icon: 'fa-tools', route: '/servicios' },
-  { id: 6, label: 'portal.menu.devices', icon: 'fa-mobile-alt', route: '/dispositivos' },
-];
 
 @Component({
   selector: 'app-portal-sidebar',
   standalone: true,
-  imports: [CommonModule, RouterModule, TranslocoModule],
-  template: `
-    <aside class="w-64 h-screen bg-slate-900 text-white flex flex-col fixed left-0 top-0">
-      <!-- Logo/Brand -->
-      <div class="p-6 border-b border-slate-700">
-        <h1 class="text-xl font-bold text-primary-400">Simplifica</h1>
-        <p class="text-xs text-slate-400 mt-1">Portal de Cliente</p>
-      </div>
-
-      <!-- Navigation -->
-      <nav class="flex-1 py-4 overflow-y-auto">
-        <ul class="space-y-1 px-3">
-          @for (item of menuItems(); track item.id) {
-            <li>
-              <a
-                [routerLink]="item.route"
-                routerLinkActive="bg-slate-800 text-primary-400"
-                [routerLinkActiveOptions]="{ exact: item.id === 1 }"
-                class="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
-              >
-                <i class="fas {{ item.icon }} w-5"></i>
-                <span>{{ item.label | transloco }}</span>
-              </a>
-            </li>
-          }
-        </ul>
-      </nav>
-
-      <!-- Footer -->
-      <div class="p-4 border-t border-slate-700 space-y-1">
-        <!-- Configuración -->
-        <a
-          routerLink="/settings"
-          routerLinkActive="bg-slate-800 text-primary-400"
-          class="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
-        >
-          <i class="fas fa-cog w-5"></i>
-          <span>{{ 'portal.menu.settings' | transloco }}</span>
-        </a>
-
-        <!-- Logout -->
-        <button
-          (click)="logout()"
-          class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-red-900/30 hover:text-red-400 transition-colors"
-        >
-          <i class="fas fa-sign-out-alt w-5"></i>
-          <span>{{ 'portal.menu.logout' | transloco }}</span>
-        </button>
-      </div>
-    </aside>
-  `,
+  host: {
+    '[class.collapsed]': 'isCollapsed()',
+    '[class.expanded]': '!isCollapsed()',
+    '[class.mobile-visible]': 'isOpen() && isMobile()',
+    '[class.mobile-hidden]': '!isOpen() && isMobile()',
+  },
+  imports: [CommonModule, RouterModule, TranslocoModule, LucideAngularModule],
+  providers: [
+    {
+      provide: LUCIDE_ICONS,
+      useValue: new LucideIconProvider({
+        Home,
+        Bell,
+        Ticket,
+        FileText,
+        Receipt,
+        Wrench,
+        Settings,
+        LogOut,
+        Smartphone,
+        Calendar,
+        LayoutGrid,
+        MessageCircle,
+        ChevronLeft,
+        ChevronRight,
+      }),
+    },
+  ],
+  templateUrl: './portal-sidebar.component.html',
+  styleUrls: ['./portal-sidebar.component.scss'],
 })
 export class PortalSidebarComponent implements OnInit {
-  private router = inject(Router);
+  private sidebarState = inject(SidebarStateService);
+  private portalAuth = inject(PortalAuthService);
   private clientPortal = inject(ClientPortalService);
+  private translocoService = inject(TranslocoService);
+  private router = inject(Router);
 
-  menuItems = signal<MenuItem[]>(ALL_MENU_ITEMS);
+  readonly isOpen = this.sidebarState.isOpen;
+  readonly isCollapsed = this.sidebarState.isCollapsed;
+
+  private _menuItems = signal<MenuItem[]>([]);
+  readonly menuItems = this._menuItems.asReadonly();
+
+  // Tooltip state for collapsed sidebar
+  hoveredLabel: string = '';
+  tooltipTop: number = 0;
+  tooltipLeft: number = 0;
+
+  readonly icons = {
+    Home,
+    Bell,
+    Ticket,
+    FileText,
+    Receipt,
+    Wrench,
+    Settings,
+    LogOut,
+    Smartphone,
+    Calendar,
+    LayoutGrid,
+    MessageCircle,
+    ChevronLeft,
+    ChevronRight,
+  };
+
+  // All possible menu items for portal clients — mirrors CRM client menu
+  private readonly allMenuItems: MenuItem[] = [
+    { id: 1, label: 'nav.inicio', icon: 'home', route: '/inicio' },
+    { id: 2, label: 'nav.notificaciones', icon: 'bell', route: '/notifications' },
+    { id: 3, label: 'nav.tickets', icon: 'ticket', route: '/tickets', moduleKey: 'moduloSAT' },
+    { id: 4, label: 'nav.presupuestos', icon: 'file-text', route: '/portal/presupuestos', moduleKey: 'moduloPresupuestos' },
+    { id: 5, label: 'nav.facturas', icon: 'receipt', route: '/portal/facturas', moduleKey: 'moduloFacturas' },
+    { id: 6, label: 'nav.servicios', icon: 'wrench', route: '/portal/servicios', moduleKey: 'moduloServicios' },
+    { id: 7, label: 'nav.dispositivos', icon: 'smartphone', route: '/portal/dispositivos', moduleKey: 'moduloSAT' },
+    { id: 8, label: 'nav.proyectos', icon: 'layout-grid', route: '/projects', moduleKey: 'moduloProyectos' },
+    { id: 9, label: 'nav.chat', icon: 'message-circle', route: '/chat', moduleKey: 'moduloChat' },
+    { id: 10, label: 'nav.reservas', icon: 'calendar', route: '/reservas', moduleKey: 'moduloReservas' },
+    { id: 11, label: 'nav.configuracion', icon: 'settings', route: '/configuracion' },
+  ];
+
+  // User display helpers — reactive to currentClient$ via toSignal
+  readonly portalUser = toSignal(this.portalAuth.currentClient$);
+
+  getUserInitial(): string {
+    const name = this.portalUser()?.full_name;
+    return name ? name.charAt(0).toUpperCase() : 'U';
+  }
+
+  getUserDisplayName(): string {
+    return this.portalUser()?.full_name || this.translocoService.translate('shared.usuario');
+  }
+
+  getUserCompany(): string {
+    return this.portalUser()?.company_name || '';
+  }
 
   ngOnInit() {
+    if (this.isMobile()) {
+      this.sidebarState.setCollapsed(false);
+      this.sidebarState.setOpen(false);
+    } else {
+      this.sidebarState.loadSavedState();
+    }
     this.loadModules();
+  }
+
+  @HostListener('window:resize', ['$event'])
+  onResize(_event: Event) {
+    if (this.isMobile()) {
+      this.sidebarState.setCollapsed(false);
+      this.sidebarState.setOpen(false);
+    }
   }
 
   private async loadModules() {
     const activeModules = await this.clientPortal.getActiveModules();
+    const allowedSet = new Set<string>(activeModules);
 
-    // Filter items: those without moduleKey are always shown;
-    // those with moduleKey are shown only when the module is active
-    const filtered = ALL_MENU_ITEMS.filter(
-      (item) => !item.moduleKey || activeModules.includes(item.moduleKey),
-    );
+    const filtered = this.allMenuItems.filter((item) => {
+      if (!item.moduleKey) return true;
+      return allowedSet.has(item.moduleKey);
+    });
 
-    this.menuItems.set(filtered);
+    this._menuItems.set(filtered);
   }
 
-  logout() {
-    this.router.navigate(['/login']);
+  isMobile(): boolean {
+    return window.innerWidth < 768;
+  }
+
+  toggleSidebar() {
+    if (this.isMobile()) {
+      this.sidebarState.toggleOpen();
+    } else {
+      this.sidebarState.toggleCollapse();
+    }
+  }
+
+  closeSidebar() {
+    this.sidebarState.setOpen(false);
+  }
+
+  toggleCollapse() {
+    if (!this.isMobile()) {
+      this.sidebarState.toggleCollapse();
+    }
+  }
+
+  getSidebarClasses(): string {
+    if (this.isMobile()) {
+      return this.isOpen() ? 'mobile-visible' : 'mobile-hidden';
+    }
+    return this.isCollapsed() ? 'collapsed' : 'expanded';
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await this.portalAuth.logout();
+      this.router.navigate(['/login']);
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
+  }
+
+  onMouseEnter(event: MouseEvent, label: string) {
+    if (!this.isCollapsed()) return;
+    const target = event.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    this.tooltipTop = rect.top + rect.height / 2;
+    this.tooltipLeft = rect.right + 10;
+    this.hoveredLabel = label;
+  }
+
+  onMouseLeave() {
+    this.hoveredLabel = '';
   }
 }

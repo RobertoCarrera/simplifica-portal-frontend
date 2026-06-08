@@ -20,6 +20,59 @@ import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts';
 import { checkRateLimit, getRateLimitHeaders } from '../_shared/rate-limiter.ts';
 import { getClientIP, SECURITY_HEADERS } from '../_shared/security.ts';
 
+// Sends a branded invitation email via send-branded-email Edge Function.
+// Falls back to Supabase Auth built-in invite if the branded function is unavailable.
+async function sendBrandedEmailInvite(params) {
+  const { companyId, to, subject, data, supabaseUrl, serviceRoleKey, emailType, fallbackFn } = params;
+  try {
+    const functionsBase = `${supabaseUrl.replace(/\/$/, '')}/functions/v1`;
+    const brandedResponse = await fetch(`${functionsBase}/send-branded-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceRoleKey}`
+      },
+      body: JSON.stringify({
+        companyId,
+        emailType,
+        to,
+        subject,
+        data
+      })
+    });
+    const result = await brandedResponse.json();
+    if (result.success) return {
+      success: true
+    };
+    console.warn('[send-company-invite] send-branded-email returned error:', result.error);
+    return {
+      success: false,
+      error: result.error
+    };
+  } catch (e) {
+    console.warn('[send-company-invite] send-branded-email unavailable, using fallback');
+    return {
+      success: false,
+      error: 'send-branded-email unavailable'
+    };
+  }
+}
+
+// Helper: wrap a promise with a timeout
+async function withTimeout(promise, ms, label) {
+  let timeoutId;
+  const timeoutPromise = new Promise(function(_, reject) {
+    timeoutId = setTimeout(function() {
+      reject(new Error('[send-company-invite] ' + label + ' timed out after ' + ms + 'ms'));
+    }, ms);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 
 serve(async (req: Request) => {
   const origin = req.headers.get('Origin') || undefined;
@@ -61,6 +114,9 @@ serve(async (req: Request) => {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const APP_URL = Deno.env.get('APP_URL') || '';
+    // CRM project credentials for calling send-branded-email
+    const CRM_SUPABASE_URL = Deno.env.get('CRM_SUPABASE_URL') || '';
+    const CRM_SERVICE_ROLE_KEY = Deno.env.get('CRM_SERVICE_ROLE_KEY') || '';
     if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
       console.error('send-company-invite: missing env vars', {
         hasUrl: !!SUPABASE_URL,
@@ -125,8 +181,15 @@ serve(async (req: Request) => {
       .toLowerCase();
     const role = String(body?.role || 'member').trim();
 
-    const VALID_INVITE_ROLES = ['admin', 'member', 'client'];
-    if (!['admin', 'member', 'client', 'owner', 'super_admin'].includes(role)) {
+    const VALID_INVITE_ROLES = [
+      'admin',
+      'member',
+      'client',
+      'professional',
+      'agent',
+      'marketer'
+    ];
+    if (!['admin', 'member', 'client', 'owner', 'super_admin', 'professional', 'agent', 'marketer'].includes(role)) {
       return new Response(
         JSON.stringify({ success: false, error: 'invalid_request', message: 'Invalid role' }),
         {
@@ -441,71 +504,227 @@ serve(async (req: Request) => {
       ? `${CLIENT_PORTAL_URL}/accept-invite`
       : `${redirectBase}/invite`;
 
+    // Explicit invite link with token — always returned in the API response so the
+    // admin can share it manually when the email doesn't arrive.
+    const inviteLink = isClientInvite
+      ? `${CLIENT_PORTAL_URL}/accept-invite?token=${inviteToken}`
+      : `${redirectBase}/invite?token=${inviteToken}`;
+
     // Send invite email using Supabase Auth
     // Strategy: Try inviteUserByEmail first, if it fails for ANY reason, fallback to OTP magic link.
     // This is robust against supabase-js version changes in error shapes.
     let emailSent = false;
     let emailError = null;
 
-    // Step 1: Try inviteUserByEmail (triggers "Invite User" email template)
-    try {
-      const { data: inviteData, error: inviteErr } =
-        await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-          redirectTo: safeRedirectUrl,
-          data: { message: message },
-        });
+    // Role label translations for Spanish email templates
+    const ROLE_LABELS = {
+      owner: 'Propietario',
+      admin: 'Administrador',
+      member: 'Miembro',
+      professional: 'Profesional',
+      agent: 'Agente',
+      marketer: 'Marketing',
+      client: 'Cliente',
+    };
+    const roleLabel = ROLE_LABELS[role] || role;
 
-      if (inviteErr) {
-        console.log('send-company-invite: inviteUserByEmail returned error', {
-          status: inviteErr.status,
-          code: (inviteErr as any).code,
-          message: inviteErr.message,
-        });
-      } else {
-        emailSent = true;
-        console.log('send-company-invite: inviteUserByEmail succeeded');
-      }
-    } catch (inviteThrown: any) {
-      console.log('send-company-invite: inviteUserByEmail threw', {
-        status: inviteThrown?.status,
-        code: inviteThrown?.code,
-        message: inviteThrown?.message,
-        name: inviteThrown?.name,
+    // ── Step 0: Send branded email via send-branded-email Edge Function ────
+    // Falls back to Supabase Auth built-in invite if unavailable or on error.
+    // Only attempt if CRM credentials are configured
+    if (CRM_SUPABASE_URL && CRM_SERVICE_ROLE_KEY) {
+      const brandedEmailResult = await sendBrandedEmailInvite({
+        companyId: role === 'owner' && isSuperAdmin ? null : currentUser.company_id,
+        to: [
+          {
+            email,
+            name: ''
+          }
+        ],
+        subject: isClientInvite ? `Te han invitado a ${APP_URL.replace(/https?:\/\//, '')}` : undefined,
+        data: {
+          invite_url: inviteLink,
+          role,
+          role_label: roleLabel,
+          inviter_name: userData.display_name || `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || undefined,
+          message: message || undefined,
+          company_cif: undefined
+        },
+        supabaseUrl: CRM_SUPABASE_URL,
+        serviceRoleKey: CRM_SERVICE_ROLE_KEY,
+        emailType: isClientInvite ? 'invite_client' : `invite_${[
+          'owner',
+          'admin',
+          'member',
+          'professional',
+          'agent',
+          'marketer'
+        ].includes(role) ? role : 'member'}`,
+        fallbackFn: async () => {
+          return {
+            success: false,
+            error: 'skipping'
+          };
+        }
       });
+
+      // If send-branded-email succeeded, skip Supabase Auth email entirely
+      if (brandedEmailResult.success) {
+        console.log('send-company-invite: branded email sent successfully, skipping Supabase Auth');
+        emailSent = true;
+      } else {
+        console.warn('send-company-invite: branded email unavailable, using Supabase Auth');
+        // Fall through to Supabase Auth email below
+      }
+    } else {
+      console.warn('send-company-invite: CRM_SUPABASE_URL or CRM_SERVICE_ROLE_KEY not set — skipping branded email, using Supabase Auth');
     }
 
-    // Step 2: If invite didn't work (user already exists, or any other reason), try Magic Link OTP
+    // ── Supabase Auth email (only if branded email didn't succeed) ─────────
     if (!emailSent) {
-      console.log('send-company-invite: Falling back to Magic Link OTP for', email);
+      // Step 1: Try inviteUserByEmail (triggers "Invite User" email template) — 15s timeout
       try {
-        const { error: otpErr } = await supabaseAdmin.auth.signInWithOtp({
-          email,
-          options: {
-            emailRedirectTo: safeRedirectUrl,
-            shouldCreateUser: false, // User already exists
-            data: { message: message },
-          },
-        });
+        const { data: inviteData, error: inviteErr } = await withTimeout(
+          supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+            redirectTo: safeRedirectUrl,
+            data: { message: message, company_invite_token: inviteToken, role: role, role_label: roleLabel }
+          }),
+          15000, 'inviteUserByEmail'
+        );
 
-        if (otpErr) {
-          console.error('send-company-invite: OTP returned error', {
-            status: otpErr.status,
-            code: (otpErr as any).code,
-            message: otpErr.message,
+        if (inviteErr) {
+          console.log('send-company-invite: inviteUserByEmail returned error', {
+            status: inviteErr.status,
+            code: (inviteErr as any).code,
+            message: inviteErr.message,
           });
-          emailError = otpErr;
         } else {
           emailSent = true;
-          console.log('send-company-invite: OTP magic link sent successfully');
+          console.log('send-company-invite: inviteUserByEmail succeeded');
         }
-      } catch (otpThrown: any) {
-        console.error('send-company-invite: OTP threw', {
-          status: otpThrown?.status,
-          code: otpThrown?.code,
-          message: otpThrown?.message,
-          name: otpThrown?.name,
+      } catch (inviteThrown: any) {
+        console.log('send-company-invite: inviteUserByEmail threw', {
+          status: inviteThrown?.status,
+          code: inviteThrown?.code,
+          message: inviteThrown?.message,
+          name: inviteThrown?.name,
         });
-        emailError = otpThrown;
+      }
+
+      // Step 2: If invite didn't work (user already exists, or any other reason), try Magic Link OTP
+      if (!emailSent) {
+        console.log('send-company-invite: Falling back to Magic Link OTP for', email);
+        try {
+          const { error: otpErr } = await withTimeout(
+            supabaseAdmin.auth.signInWithOtp({
+              email,
+              options: {
+                emailRedirectTo: safeRedirectUrl,
+                shouldCreateUser: false, // User already exists
+                data: { message: message, company_invite_token: inviteToken, role: role, role_label: roleLabel },
+              },
+            }),
+            15000, 'signInWithOtp'
+          );
+
+          if (otpErr) {
+            console.error('send-company-invite: OTP returned error', {
+              status: otpErr.status,
+              code: (otpErr as any).code,
+              message: otpErr.message,
+            });
+            // 429 means an email was already sent within the last 60 seconds — treat as success
+            if (otpErr.status === 429 || (otpErr as any).code === 'over_email_send_rate_limit') {
+              emailSent = true;
+              console.log('send-company-invite: OTP rate-limited — previous email still valid');
+            } else {
+              emailError = otpErr;
+            }
+          } else {
+            emailSent = true;
+            console.log('send-company-invite: OTP magic link sent successfully');
+          }
+        } catch (otpThrown: any) {
+          console.error('send-company-invite: OTP threw', {
+            status: otpThrown?.status,
+            code: otpThrown?.code,
+            message: otpThrown?.message,
+            name: otpThrown?.name,
+          });
+          emailError = otpThrown;
+        }
+      }
+    }
+
+    // ── Portal user linking (for client invites) ──────────────────────────
+    // Create client_portal_users in the portal database so the portal app
+    // recognizes the user after magic-link login. Also mirrors the record
+    // into the CRM database for admin visibility.
+    if (isClientInvite && emailSent) {
+      try {
+        // First, check if a client_portal_users record exists from a previous invite
+        const { data: existingRow } = await supabaseAdmin
+          .from('client_portal_users')
+          .select('auth_user_id')
+          .eq('email', email)
+          .maybeSingle();
+        let portalAuthUserId = existingRow?.auth_user_id ?? null;
+
+        if (!portalAuthUserId) {
+          // Fallback: search auth.users via admin API
+          try {
+            const { data: listData } = await withTimeout(
+              supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 500 }),
+              10000, 'listUsers'
+            );
+            const matchedUser = listData?.users?.find((u: any) => u.email?.toLowerCase() === email.toLowerCase());
+            portalAuthUserId = matchedUser?.id ?? null;
+          } catch (lookupErr) {
+            console.warn('send-company-invite: listUsers failed', lookupErr?.message);
+          }
+        }
+
+        if (portalAuthUserId) {
+          // Try to find the client_id — but don't block the upsert if not found yet.
+          // The invited person may only exist in company_invitations, not in clients yet.
+          const { data: clientRow } = await supabaseAdmin
+            .from('clients')
+            .select('id')
+            .eq('email', email)
+            .eq('company_id', currentUser.company_id)
+            .maybeSingle();
+          const clientId = clientRow?.id ?? null;
+
+          // Upsert into client_portal_users
+          const { error: upsertErr } = await supabaseAdmin
+            .from('client_portal_users')
+            .upsert({
+              auth_user_id: portalAuthUserId,
+              client_id: clientId,
+              company_id: currentUser.company_id,
+              email: email,
+              is_active: true,
+            }, {
+              onConflict: 'auth_user_id'
+            });
+
+          if (upsertErr) {
+            console.warn('send-company-invite: client_portal_users upsert failed', {
+              code: upsertErr.code,
+              message: upsertErr.message,
+              details: upsertErr.details
+            });
+          } else {
+            console.log('send-company-invite: client_portal_users upserted', {
+              auth_user_id: portalAuthUserId,
+              client_id: clientId
+            });
+          }
+        } else {
+          console.warn('send-company-invite: could not determine portal auth user ID for client_portal_users linking');
+        }
+      } catch (portalLinkErr) {
+        // Non-fatal — invitation still works, linking can be retried
+        console.warn('send-company-invite: portal user linking failed (non-fatal)', portalLinkErr?.message);
       }
     }
 

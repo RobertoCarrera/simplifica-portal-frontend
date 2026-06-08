@@ -103,7 +103,7 @@ serve(async (req: Request) => {
     // 1. Validate Invitation Token (MUST be valid and pending)
     const { data: invitation, error: inviteErr } = await supabaseAdmin
       .from('company_invitations')
-      .select('id, email, status, expires_at, created_at, company_id')
+      .select('id, email, status, expires_at, created_at, company_id, invited_by_user_id, role')
       .eq('token', invitation_token)
       .eq('status', 'pending')
       .eq('email', sanitizedEmail) // Critical security check
@@ -244,6 +244,76 @@ serve(async (req: Request) => {
       .update({ status: 'accepted' })
       .eq('id', invitation.id)
       .eq('status', 'pending');
+
+    // 4.6. Send welcome email via send-branded-email (non-blocking)
+    // After invitation is accepted, send a branded welcome email to the new user.
+    // This is best-effort: failure does not affect the invitation acceptance flow.
+    try {
+      const crmSupabaseUrl =
+        Deno.env.get('CRM_SUPABASE_URL') || Deno.env.get('SUPABASE_URL') || '';
+      const crmServiceRoleKey =
+        Deno.env.get('CRM_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+
+      if (!crmSupabaseUrl) {
+        console.warn(
+          'create-invited-user: CRM_SUPABASE_URL not configured — skipping welcome email',
+        );
+        throw new Error('CRM_SUPABASE_URL not configured');
+      }
+
+      // Fetch company and inviter info for the welcome email template
+      const companyId = invitation.company_id;
+
+      let companyName = 'Tu empresa';
+      if (companyId) {
+        const { data: company } = await supabaseAdmin
+          .from('companies')
+          .select('name')
+          .eq('id', companyId)
+          .single();
+        if (company) companyName = company.name;
+      }
+
+      let inviterName = '';
+      if (invitation.invited_by_user_id) {
+        const { data: inviter } = await supabaseAdmin
+          .from('users')
+          .select('display_name, first_name, last_name')
+          .eq('id', invitation.invited_by_user_id)
+          .single();
+        if (inviter) {
+          inviterName =
+            inviter.display_name ||
+            `${inviter.first_name || ''} ${inviter.last_name || ''}`.trim();
+        }
+      }
+
+      const welcomeEmailFn = `${crmSupabaseUrl}/functions/v1/send-branded-email`;
+      await fetch(welcomeEmailFn, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${crmServiceRoleKey}`,
+        },
+        body: JSON.stringify({
+          companyId: companyId || null,
+          emailType: 'welcome',
+          to: [{ email: sanitizedEmail, name: '' }],
+          subject: `Bienvenido/a a ${companyName}`,
+          data: {
+            user_name: sanitizedEmail.split('@')[0], // fallback name
+            company_name: companyName,
+            inviter_name: inviterName || undefined,
+            role: invitation.role,
+          },
+        }),
+      });
+    } catch (welcomeErr) {
+      console.warn(
+        'create-invited-user: welcome email failed (non-blocking):',
+        welcomeErr?.message,
+      );
+    }
 
     // 5. Return Session to client (do not expose internal userId)
     return new Response(

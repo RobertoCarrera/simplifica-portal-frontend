@@ -1,0 +1,87 @@
+/* Host styles for collapsed/expanded/mobile states — mirrors CRM responsive-sidebar */
+:host {
+  z-index: 1000 !important;
+}
+
+:host {
+  @media (min-width: 768px) {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    height: 100vh !important;
+    z-index: 50 !important;
+    transition: width 0.3s ease !important;
+    overflow: visible !important;
+  }
+}
+
+:host(.collapsed) {
+  @media (min-width: 768px) {
+    width: 4rem !important;
+  }
+}
+
+:host(.expanded) {
+  @media (min-width: 768px) {
+    width: 16rem !important;
+  }
+}
+
+/* Mobile hidden: slide off-screen left */
+:host(.mobile-hidden) {
+  @media (max-width: 767px) {
+    transform: translateX(-100%) !important;
+  }
+}
+
+/* Mobile visible: slide in from left */
+:host(.mobile-visible) {
+  @media (max-width: 767px) {
+    transform: translateX(0) !important;
+  }
+}
+
+/* Truncate labels when collapsed */
+:host(.collapsed) .truncate {
+  max-width: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Reduce padding on collapsed items */
+:host(.collapsed) a {
+  padding-left: 0.5rem !important;
+  padding-right: 0.5rem !important;
+}
+
+/* Expand button visibility */
+:host(.collapsed) .sidebar-expand-btn {
+  display: flex !important;
+}
+
+:host(:not(.collapsed)) .sidebar-expand-btn {
+  display: none !important;
+}
+
+.sidebar-expand-btn {
+  right: -12px;
+  top: 50px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+  z-index: 1100;
+}
+
+/* User profile row centered when collapsed */
+:host(.collapsed) .user-profile-row {
+  justify-content: center !important;
+}
+
+/* Logout button always visible even when collapsed */
+:host(.collapsed) .logout-btn {
+  display: flex !important;
+  justify-content: center !important;
+}
+
+/* router-link-active — active nav item styling */
+a.bg-blue-50 {
+  /* applied via routerLinkActive directive */
+}

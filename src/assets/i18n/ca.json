@@ -1,4 +1,29 @@
 {
+  "nav": {
+    "inicio": "Inici",
+    "notificaciones": "Notificacions",
+    "tickets": "Tickets",
+    "presupuestos": "Pressupostos",
+    "facturas": "Factures",
+    "servicios": "Serveis",
+    "dispositivos": "Dispositius",
+    "proyectos": "Projectes",
+    "chat": "Xat",
+    "reservas": "Reserves",
+    "configuracion": "Configuració"
+  },
+  "portal": {
+    "menu": {
+      "dashboard": "Dashboard",
+      "appointments": "Cites",
+      "quotes": "Pressupostos",
+      "invoices": "Factures",
+      "services": "Serveis",
+      "devices": "Dispositius",
+      "settings": "Configuració",
+      "logout": "Tancar sessió"
+    }
+  },
   "cookie": {
     "title": "Usem cookies",
     "description": "Algunes cookies son necessàries per al funcionament del lloc. Altres son opcionals i ens ajuden a millorar.",
