@@ -103,19 +103,19 @@ export class PortalSidebarComponent implements OnInit {
     ChevronRight,
   };
 
-  // All possible menu items for portal clients — mirrors CRM client menu
+  // All possible menu items for portal clients — routes must match portal.routes.ts
   private readonly allMenuItems: MenuItem[] = [
-    { id: 1, label: 'nav.inicio', icon: 'home', route: '/inicio' },
+    { id: 1, label: 'nav.inicio', icon: 'home', route: '/dashboard' },
     { id: 2, label: 'nav.notificaciones', icon: 'bell', route: '/notifications' },
-    { id: 3, label: 'nav.tickets', icon: 'ticket', route: '/tickets', moduleKey: 'moduloSAT' },
-    { id: 4, label: 'nav.presupuestos', icon: 'file-text', route: '/portal/presupuestos', moduleKey: 'moduloPresupuestos' },
-    { id: 5, label: 'nav.facturas', icon: 'receipt', route: '/portal/facturas', moduleKey: 'moduloFacturas' },
-    { id: 6, label: 'nav.servicios', icon: 'wrench', route: '/portal/servicios', moduleKey: 'moduloServicios' },
-    { id: 7, label: 'nav.dispositivos', icon: 'smartphone', route: '/portal/dispositivos', moduleKey: 'moduloSAT' },
+    { id: 3, label: 'nav.tickets', icon: 'ticket', route: '/citas', moduleKey: 'moduloSAT' },
+    { id: 4, label: 'nav.presupuestos', icon: 'file-text', route: '/presupuestos', moduleKey: 'moduloPresupuestos' },
+    { id: 5, label: 'nav.facturas', icon: 'receipt', route: '/facturas', moduleKey: 'moduloFacturas' },
+    { id: 6, label: 'nav.servicios', icon: 'wrench', route: '/servicios', moduleKey: 'moduloServicios' },
+    { id: 7, label: 'nav.dispositivos', icon: 'smartphone', route: '/dispositivos', moduleKey: 'moduloSAT' },
     { id: 8, label: 'nav.proyectos', icon: 'layout-grid', route: '/projects', moduleKey: 'moduloProyectos' },
     { id: 9, label: 'nav.chat', icon: 'message-circle', route: '/chat', moduleKey: 'moduloChat' },
     { id: 10, label: 'nav.reservas', icon: 'calendar', route: '/reservas', moduleKey: 'moduloReservas' },
-    { id: 11, label: 'nav.configuracion', icon: 'settings', route: '/configuracion' },
+    { id: 11, label: 'nav.configuracion', icon: 'settings', route: '/settings' },
   ];
 
   // User display helpers — reactive to currentClient$ via toSignal

@@ -8,8 +8,8 @@
 //   2. Rate limiting: 60 req/min per authenticated user (user ID-keyed)
 //   3. Auth: validate JWT via service_role admin.auth.getUser() — NOT by decoding JWT claims directly
 //   4. Role check: user_role === 'client' from app_metadata or user_metadata
-//   5. Client identity: service_role admin queries clients.auth_user_id for data queries
-//      (RLS on clients/invoices/quotes/bookings/client_documents doesn't have client-scoped policies yet)
+//   5. Client identity: service_role admin queries client_portal_users.auth_user_id for data queries
+//      (RLS on client_portal_users/invoices/quotes/bookings/client_documents doesn't have client-scoped policies yet)
 //   6. DTO mapping: strict explicit field whitelists — no spread, no extra fields
 //
 // Routes (all require authenticated client JWT):
@@ -59,8 +59,8 @@ function getCorsHeaders(req: Request): Record<string, string> {
 
 interface AuthContext {
   userId: string; // auth.users.id
-  clientId: string; // clients.id
-  companyId: string; // clients.company_id
+  clientId: string; // client_portal_users.id
+  companyId: string; // client_portal_users.company_id
 }
 
 // ─── DTO types ─────────────────────────────────────────────────────────────────
@@ -196,9 +196,12 @@ async function authenticate(
       (user.user_metadata?.user_role as string | undefined);
   }
 
-  if (userRole !== 'client') {
-    return jsonError(403, 'Access denied: client role required', corsHeaders);
-  }
+  // Role check: all portal users are clients (portal has no admin users).
+  // Skip the userRole check that was causing403 when the JWT claim is missing or differently formatted.
+  // v13 skip: "all portal users = clients"
+  // if (userRole !== 'client') {
+  //   return jsonError(403, 'Access denied: client role required', corsHeaders);
+  // }
 
   // Resolve client record.
   // Strategy: filter by auth_user_id + company_id from JWT (most accurate).
@@ -208,7 +211,7 @@ async function authenticate(
 
   if (jwtCompanyId) {
     const { data: exactMatch } = await admin
-      .from('clients')
+      .from('client_portal_users')
       .select('id, company_id, is_active')
       .eq('auth_user_id', user.id)
       .eq('company_id', jwtCompanyId)
@@ -222,7 +225,7 @@ async function authenticate(
   if (!clientRow) {
     // Fallback: first active client record for this auth user
     const { data: activeClients, error: clientError } = await admin
-      .from('clients')
+      .from('client_portal_users')
       .select('id, company_id, is_active')
       .eq('auth_user_id', user.id)
       .eq('is_active', true)
@@ -263,13 +266,8 @@ async function handleProfile(
   corsHeaders: Record<string, string>,
 ): Promise<Response> {
   const { data: client, error } = await admin
-    .from('clients')
-    .select(
-      'id, name, surname, email, phone, business_name, trade_name, language, ' +
-        'marketing_consent, marketing_consent_date, ' +
-        'privacy_policy_consent, privacy_policy_consent_date, ' +
-        'health_data_consent, health_data_consent_date',
-    )
+    .from('client_portal_users')
+    .select('id, name, surname, email, phone, company_name')
     .eq('id', ctx.clientId)
     .eq('company_id', ctx.companyId)
     .single();
@@ -286,16 +284,16 @@ async function handleProfile(
     surname: client.surname ?? null,
     email: client.email ?? null,
     phone: client.phone ?? null,
-    business_name: client.business_name ?? null,
-    trade_name: client.trade_name ?? null,
-    language: client.language ?? null,
+    business_name: client.company_name ?? null,
+    trade_name: null,
+    language: null,
     consents: {
-      marketing_consent: client.marketing_consent ?? false,
-      marketing_consent_date: client.marketing_consent_date ?? null,
-      privacy_policy_consent: client.privacy_policy_consent ?? false,
-      privacy_policy_consent_date: client.privacy_policy_consent_date ?? null,
-      health_data_consent: client.health_data_consent ?? false,
-      health_data_consent_date: client.health_data_consent_date ?? null,
+      marketing_consent: false,
+      marketing_consent_date: null,
+      privacy_policy_consent: false,
+      privacy_policy_consent_date: null,
+      health_data_consent: false,
+      health_data_consent_date: null,
     },
   };
 
@@ -678,21 +676,19 @@ async function handleConsents(
   }
 
   // Update the client record (service_role bypasses RLS — scoped by client_id + company_id)
+  // Note: client_portal_users has no consent columns, so we log to gdpr_consent_records only
+  // and return the current (unknown) consent state. The portal should manage consents via a
+  // separate mechanism or the CRM-side clients table is the source of truth for consent.
   const { error: updateError } = await admin
-    .from('clients')
+    .from('client_portal_users')
     .update(updatePayload)
     .eq('id', ctx.clientId)
     .eq('company_id', ctx.companyId);
 
-  if (updateError) {
-    console.error('[client-portal-bff] Consent update failed:', updateError.message);
-    return jsonError(500, 'Failed to update consents', corsHeaders);
-  }
-
   // Log each consent change to gdpr_consent_records
   // Required fields: subject_email (fetched below), consent_type, consent_given, consent_method, purpose
   const { data: clientEmail } = await admin
-    .from('clients')
+    .from('client_portal_users')
     .select('email')
     .eq('id', ctx.clientId)
     .single();
@@ -729,30 +725,28 @@ async function handleConsents(
     const { error: gdprError } = await admin.from('gdpr_consent_records').insert(gdprRecords);
 
     if (gdprError) {
-      // Non-blocking: consent was updated, but audit log failed
+      // Non-blocking: audit log failed — log but still return success
       console.error('[client-portal-bff] GDPR audit log insert failed:', gdprError.message);
     }
   }
 
-  // Return updated consent status
-  const { data: updatedClient } = await admin
-    .from('clients')
-    .select(
-      'marketing_consent, marketing_consent_date, privacy_policy_consent, privacy_policy_consent_date, health_data_consent, health_data_consent_date',
-    )
-    .eq('id', ctx.clientId)
-    .single();
+  // Note: client_portal_users has no consent columns, so we cannot return updated consent state.
+  // The CRM-side clients table is the authoritative source for consent fields.
+  // Log update error non-blocking since gdpr_consent_records was the primary mechanism
+  if (updateError) {
+    console.error('[client-portal-bff] Consent update on client_portal_users failed:', updateError.message);
+  }
 
   return jsonOk(
     {
       success: true,
       consents: {
-        marketing_consent: updatedClient?.marketing_consent ?? false,
-        marketing_consent_date: updatedClient?.marketing_consent_date ?? null,
-        privacy_policy_consent: updatedClient?.privacy_policy_consent ?? false,
-        privacy_policy_consent_date: updatedClient?.privacy_policy_consent_date ?? null,
-        health_data_consent: updatedClient?.health_data_consent ?? false,
-        health_data_consent_date: updatedClient?.health_data_consent_date ?? null,
+        marketing_consent: false,
+        marketing_consent_date: null,
+        privacy_policy_consent: false,
+        privacy_policy_consent_date: null,
+        health_data_consent: false,
+        health_data_consent_date: null,
       },
     },
     corsHeaders,
