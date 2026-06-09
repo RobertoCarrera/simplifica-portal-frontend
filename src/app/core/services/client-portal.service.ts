@@ -11,7 +11,70 @@ export interface ClientPortalQuote {
   valid_until?: string | null;
   total_amount?: number;
   currency?: string;
+  subtotal?: number;
+  tax_amount?: number;
+  irpf_amount?: number;
   items?: any[];
+  // Payment-related fields
+  payment_status?: 'pending' | 'paid' | null;
+  payment_url?: string | null;
+  stripe_payment_url?: string | null;
+  paypal_payment_url?: string | null;
+  // Computed client-side
+  rejection_reason?: string | null;
+}
+
+/** Payment-oriented status for client filtering */
+export type QuotePaymentStatus = 'pendiente' | 'pagado' | 'vencido';
+
+/** Derive a payment-oriented status from a quote's raw fields */
+export function deriveQuotePaymentStatus(quote: ClientPortalQuote): QuotePaymentStatus {
+  const now = new Date();
+  const validUntil = quote.valid_until ? new Date(quote.valid_until) : null;
+  const isExpired = validUntil && validUntil < now;
+
+  // If explicitly marked as paid at the quote level
+  if (quote.payment_status === 'paid') return 'pagado';
+  // If accepted or invoiced, consider it paid (or at least not pending/expired payment)
+  if (quote.status === 'accepted' || quote.status === 'invoiced') return 'pagado';
+
+  // Expired: past valid_until and not in a terminal state
+  if (isExpired && !['accepted', 'rejected', 'invoiced', 'cancelled'].includes(quote.status)) {
+    return 'vencido';
+  }
+
+  // Everything else is pending
+  return 'pendiente';
+}
+
+/** Derive a human-readable billing period from quote items */
+export function deriveQuotePeriodicity(quote: ClientPortalQuote): string | null {
+  const items = quote.items || [];
+  if (!items.length) return null;
+
+  const periods = new Set<string>();
+  for (const item of items) {
+    const bp = (item as any).billing_period;
+    if (bp) periods.add(bp);
+  }
+  if (periods.size === 0) return null;
+  if (periods.size === 1) return Array.from(periods)[0];
+  return 'mixed';
+}
+
+export function getPeriodicityLabel(period: string | null): string {
+  if (!period) return '—';
+  const labels: Record<string, string> = {
+    'one-time': 'Pago único',
+    one_time: 'Pago único',
+    monthly: 'Mensual',
+    quarterly: 'Trimestral',
+    annually: 'Anual',
+    annual: 'Anual',
+    yearly: 'Anual',
+    mixed: 'Mixta',
+  };
+  return labels[period] || period;
 }
 
 export interface ClientPortalInvoice {
