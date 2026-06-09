@@ -13,11 +13,13 @@
 //   6. DTO mapping: strict explicit field whitelists — no spread, no extra fields
 //
 // Routes (all require authenticated client JWT):
-//   GET  /profile      → clients profile + GDPR consents
+//   GET  /profile → clients profile + GDPR consents
 //   GET  /appointments → bookings for the client (future by default, ?include_past=true for all)
 //   GET  /invoices     → invoices for the client
 //   GET  /quotes       → quotes for the client (non-draft)
 //   GET  /documents    → document metadata + presigned download URLs
+//   GET  /services     → public services catalog (from CRM cross-project)
+//   GET  /contracted-services → services the client has contracted
 //   POST /consents     → update marketing_consent / privacy_policy_consent only
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -29,6 +31,8 @@ import { getClientIP, withSecurityHeaders } from '../_shared/security.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const CRM_SUPABASE_URL = Deno.env.get('CRM_SUPABASE_URL') ?? '';
+const CRM_SERVICE_ROLE_KEY = Deno.env.get('CRM_SERVICE_ROLE_KEY') ?? '';
 
 // Storage bucket name for client documents
 const CLIENT_DOCS_BUCKET = 'client-documents';
@@ -126,6 +130,45 @@ interface DocumentDto {
   download_url: string;
 }
 
+interface ServiceDto {
+  id: string;
+  name: string | null;
+  description: string | null;
+  base_price: number | null;
+  category: string | null;
+  has_variants: boolean | null;
+  is_public: boolean | null;
+  is_active: boolean | null;
+  duration_minutes: number | null;
+  variants?: ServiceVariantDto[];
+}
+
+interface ServiceVariantDto {
+  id: string;
+  variant_name: string | null;
+  pricing: any | null;
+  billing_period: string | null;
+  is_active: boolean | null;
+}
+
+interface ContractedServiceDto {
+  id: string;
+  quote_id: string;
+  quote_number: string | null;
+  title: string | null;
+  description: string | null;
+  service_id: string | null;
+  variant_id: string | null;
+  variant_name: string | null;
+  unit_price: number | null;
+  quantity: number | null;
+  total: number | null;
+  billing_period: string | null;
+  status: string | null;
+  quote_date: string | null;
+  is_recurring: boolean;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function jsonOk(body: unknown, corsHeaders: Record<string, string>): Response {
@@ -139,6 +182,20 @@ function jsonError(status: number, error: string, corsHeaders: Record<string, st
   return new Response(JSON.stringify({ error }), {
     status,
     headers: withSecurityHeaders({ ...corsHeaders, 'Content-Type': 'application/json' }),
+  });
+}
+
+/**
+ * Create a Supabase client for the CRM database (cross-project access).
+ * Returns null if CRM credentials are not configured.
+ */
+function createCrmAdminClient(): ReturnType<typeof createClient> | null {
+  if (!CRM_SUPABASE_URL || !CRM_SERVICE_ROLE_KEY) {
+    console.warn('[client-portal-bff] CRM credentials not configured — cannot access services catalog');
+    return null;
+  }
+  return createClient(CRM_SUPABASE_URL, CRM_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
   });
 }
 
@@ -363,7 +420,7 @@ async function handleInvoices(
   const { data: invoices, error } = await admin
     .from('invoices')
     .select(
-      'id, full_invoice_number, invoice_number, invoice_date, due_date, total, currency, status, payment_link_token, payment_link_expires_at, items:invoice_items(*)',
+      'id, full_invoice_number, invoice_number, invoice_date, due_date, total, currency, status, payment_link_token, payment_link_expires_at, items',
     )
     .eq('client_id', ctx.clientId)
     .eq('company_id', ctx.companyId)
@@ -418,7 +475,7 @@ async function handleQuotes(
 ): Promise<Response> {
   const { data: quotes, error } = await admin
     .from('quotes')
-    .select('id, full_quote_number, title, valid_until, total_amount, currency, status, quote_date, items:quote_items(*)')
+    .select('id, full_quote_number, title, valid_until, total_amount, currency, status, quote_date, items')
     .eq('client_id', ctx.clientId)
     .eq('company_id', ctx.companyId)
     .neq('status', 'draft')
@@ -462,7 +519,7 @@ async function handleQuoteById(
 
   const { data: quote, error } = await admin
     .from('quotes')
-    .select('id, full_quote_number, title, valid_until, total_amount, currency, status, quote_date, items:quote_items(*)')
+    .select('id, full_quote_number, title, valid_until, total_amount, currency, status, quote_date, items')
     .eq('id', id)
     .eq('client_id', ctx.clientId)
     .eq('company_id', ctx.companyId)
@@ -479,7 +536,7 @@ async function handleQuoteById(
   }
 
   // Explicit DTO mapping — NEVER expose markup, internal notes, cost details
-  const dto: QuoteDto & { items?: any } = {
+  const dto: QuoteDto& { items?: any } = {
     id: quote.id,
     quote_number: quote.full_quote_number ?? null,
     title: quote.title ?? null,
@@ -510,7 +567,7 @@ async function handleInvoiceById(
 
   const { data: invoice, error } = await admin
     .from('invoices')
-    .select('id, full_invoice_number, invoice_number, invoice_date, due_date, total, currency, status, payment_link_token, payment_link_expires_at, items:invoice_items(*)')
+    .select('id, full_invoice_number, invoice_number, invoice_date, due_date, total, currency, status, payment_link_token, payment_link_expires_at, items')
     .eq('id', id)
     .eq('client_id', ctx.clientId)
     .eq('company_id', ctx.companyId)
@@ -753,6 +810,185 @@ async function handleConsents(
   );
 }
 
+/**
+ * GET /modules
+ * Returns the list of active modules for the client's company.
+ * Scoped by company_id — clients only see modules from their own company.
+ * Used by the portal sidebar to show/hide menu items based on company config.
+ */
+async function handleModules(
+  admin: ReturnType<typeof createClient>,
+  ctx: AuthContext,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const { data, error } = await admin
+    .from('company_modules')
+    .select('module_key, status')
+    .eq('company_id', ctx.companyId)
+    .eq('status', 'active');
+
+  if (error) {
+    console.error('[client-portal-bff] Modules fetch failed:', error?.message);
+    return jsonError(500, 'Failed to fetch modules', corsHeaders);
+  }
+
+  const activeModules = (data ?? []).map((row) => row.module_key);
+  return jsonOk({ data: { modules: activeModules } }, corsHeaders);
+}
+
+/**
+ * GET /services
+ * Returns public services from the company's catalog (via CRM cross-project access).
+ * Scoped by company_id — clients only see services from their own company.
+ * Used by the portal to show available services catalog.
+ */
+async function handleServices(
+  ctx: AuthContext,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const crmAdmin = createCrmAdminClient();
+
+  if (!crmAdmin) {
+    console.error('[client-portal-bff] Services: CRM client not available');
+    return jsonError(500, 'Services catalog not available', corsHeaders);
+  }
+
+  // Fetch public services for this company from CRM
+  const { data: services, error: servicesError } = await crmAdmin
+    .from('services')
+    .select('id, name, description, base_price, category, has_variants, is_public, is_active, duration_minutes')
+    .eq('company_id', ctx.companyId)
+    .eq('is_public', true)
+    .eq('is_active', true)
+    .order('name');
+
+  if (servicesError) {
+    console.error('[client-portal-bff] Services fetch failed:', servicesError?.message);
+    return jsonError(500, 'Failed to fetch services', corsHeaders);
+  }
+
+  if (!services || services.length === 0) {
+    return jsonOk({ data: [] }, corsHeaders);
+  }
+
+  // Fetch variants for services that have them
+  const serviceIds = services.map(s => s.id);
+  const { data: variants, error: variantsError } = await crmAdmin
+    .from('service_variants')
+    .select('id, service_id, variant_name, pricing, billing_period, is_active')
+    .in('service_id', serviceIds)
+    .eq('is_active', true)
+    .order('sort_order');
+
+  if (variantsError) {
+    console.warn('[client-portal-bff] Variants fetch failed, returning services without variants:', variantsError?.message);
+  }
+
+  // Attach variants to services
+  const variantsByServiceId: Record<string, ServiceVariantDto[]> = {};
+  if (variants) {
+    for (const variant of variants) {
+      if (!variantsByServiceId[variant.service_id]) {
+        variantsByServiceId[variant.service_id] = [];
+      }
+      variantsByServiceId[variant.service_id].push({
+        id: variant.id,
+        variant_name: variant.variant_name ?? null,
+        pricing: variant.pricing ?? null,
+        billing_period: variant.billing_period ?? null,
+        is_active: variant.is_active ?? null,
+      });
+    }
+  }
+
+  const dtos: ServiceDto[] = services.map(s => ({
+    id: s.id,
+    name: s.name ?? null,
+    description: s.description ?? null,
+    base_price: s.base_price ?? null,
+    category: s.category ?? null,
+    has_variants: s.has_variants ?? null,
+    is_public: s.is_public ?? null,
+    is_active: s.is_active ?? null,
+    duration_minutes: s.duration_minutes ?? null,
+    variants: variantsByServiceId[s.id] || [],
+  }));
+
+  return jsonOk({ data: dtos }, corsHeaders);
+}
+
+/**
+ * GET /contracted-services
+ * Returns services the client has contracted (accepted/invoiced quotes with service items).
+ * Scoped by client_id — clients only see their own contracted services.
+ * Used by the portal "Mis Servicios" page.
+ */
+async function handleContractedServices(
+  admin: ReturnType<typeof createClient>,
+  ctx: AuthContext,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  // Fetch accepted/invoiced quotes for this client (these represent contracted services)
+  const { data: quotes, error: quotesError } = await admin
+    .from('quotes')
+    .select('id, full_quote_number, title, status, quote_date, total_amount, currency, items')
+    .eq('client_id', ctx.clientId)
+    .eq('company_id', ctx.companyId)
+    .in('status', ['accepted', 'invoiced'])
+    .order('quote_date', { ascending: false });
+
+  if (quotesError) {
+    console.error('[client-portal-bff] Contracted services fetch failed:', quotesError?.message);
+    return jsonError(500, 'Failed to fetch contracted services', corsHeaders);
+  }
+
+  if (!quotes || quotes.length === 0) {
+    return jsonOk({ data: [] }, corsHeaders);
+  }
+
+  // Parse items JSONB and build contracted service DTOs
+  // The items JSONB contains an array of line items with service info
+  const contractedServices: ContractedServiceDto[] = [];
+
+  for (const quote of quotes) {
+    let itemsArray: any[] = [];
+    try {
+      if (quote.items && typeof quote.items === 'object') {
+        itemsArray = Array.isArray(quote.items) ? quote.items : [quote.items];
+      }
+    } catch {
+      // If items parsing fails, skip this quote's items
+      console.warn('[client-portal-bff] Failed to parse items for quote:', quote.id);
+    }
+
+    for (const item of itemsArray) {
+      // Determine if this is a recurring service
+      const billingPeriod = item.billing_period || item.recurrence_type || 'one-time';
+      const isRecurring = billingPeriod !== 'one-time' && billingPeriod !== 'none';
+
+      contractedServices.push({
+        id: `${quote.id}-${item.line_number || 0}`,
+        quote_id: quote.id,
+        quote_number: quote.full_quote_number ?? null,
+        title: quote.title ?? null,
+        description: item.description ?? null,
+        service_id: item.service_id ?? null,
+        variant_id: item.variant_id ?? null,
+        variant_name: item.variant_name ?? null,
+        unit_price: item.unit_price ?? null,
+        quantity: item.quantity ?? null,
+        total: item.total ?? null,
+        billing_period: billingPeriod,
+        status: quote.status ?? null,
+        quote_date: quote.quote_date ?? null,
+        is_recurring: isRecurring,
+      });
+    }
+  }
+
+  return jsonOk({ data: contractedServices }, corsHeaders);
+}
+
 // ─── Main Serve ───────────────────────────────────────────────────────────────
 
 serve(async (req: Request) => {
@@ -859,6 +1095,12 @@ serve(async (req: Request) => {
         case 'documents':
           return await handleDocuments(admin, ctx, corsHeaders);
 
+        case 'services':
+          return await handleServices(ctx, corsHeaders);
+
+        case 'contracted-services':
+          return await handleContractedServices(admin, ctx, corsHeaders);
+
         default:
           return jsonError(404, `Unknown route: ${route}`, corsHeaders);
       }
@@ -881,29 +1123,3 @@ serve(async (req: Request) => {
     return jsonError(500, 'Internal server error', corsHeaders);
   }
 });
-
-/**
- * GET /modules
- * Returns the list of active modules for the client's company.
- * Scoped by company_id — clients only see modules from their own company.
- * Used by the portal sidebar to show/hide menu items based on company config.
- */
-async function handleModules(
-  admin: ReturnType<typeof createClient>,
-  ctx: AuthContext,
-  corsHeaders: Record<string, string>,
-): Promise<Response> {
-  const { data, error } = await admin
-    .from('company_modules')
-    .select('module_key, status')
-    .eq('company_id', ctx.companyId)
-    .eq('status', 'active');
-
-  if (error) {
-    console.error('[client-portal-bff] Modules fetch failed:', error?.message);
-    return jsonError(500, 'Failed to fetch modules', corsHeaders);
-  }
-
-  const activeModules = (data ?? []).map((row) => row.module_key);
-  return jsonOk({ data: { modules: activeModules } }, corsHeaders);
-}
