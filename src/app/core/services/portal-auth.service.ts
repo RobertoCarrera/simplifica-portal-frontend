@@ -261,45 +261,81 @@ export class PortalAuthService implements IPortalAuth {
   }
 
   /**
-   * Login with OTP (magic link)
-   * Sends a magic link email to the client.
-   * The email is validated against client_portal_users table by the edge function.
+   * Login with OTP (magic link).
+   *
+   * Sends a magic link email to the client. Routes through the
+   * `portal-request-otp` edge function (service_role) instead of calling
+   * `supabase.auth.signInWithOtp` directly with the anon key, because the
+   * anon-key path is broken in the portal Supabase project (throws
+   * "Database error updating user" + 500). The magic-link verify on
+   * `/auth/callback` is unchanged and still uses `supabase.auth.onAuthStateChange`.
+   *
+   * Anti-enumeration contract is preserved server-side: the edge function
+   * returns success for unknown / inactive emails without sending anything.
    */
   async loginWithOTP(
     email: string,
   ): Promise<{ success: boolean; error?: string }> {
+    // Validate email format (keep on the frontend for fast UX feedback)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!email || !emailRegex.test(email.trim())) {
+      return { success: false, error: "Email inválido" };
+    }
+
+    const cfg = this.runtimeConfig.getSupabase();
+    const supabaseUrl = cfg?.url?.trim() || environment.supabase.url;
+    const anonKey = cfg?.anonKey?.trim() || environment.supabase.anonKey;
+
+    if (!supabaseUrl || !anonKey) {
+      return { success: false, error: "Configuración del portal incompleta" };
+    }
+
+    const fnUrl = `${supabaseUrl}/functions/v1/portal-request-otp`;
+
     try {
-      // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-      if (!email || !emailRegex.test(email.trim())) {
+      const res = await fetch(fnUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+        },
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      });
+
+      if (res.ok) {
+        return { success: true };
+      }
+
+      // 400 — invalid email (server-side double-check)
+      if (res.status === 400) {
         return { success: false, error: "Email inválido" };
       }
 
-      const { error } = await this.supabase.auth.signInWithOtp({
-        email: email.trim().toLowerCase(),
-        options: {
-          // Redirect to portal after magic link click
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-          shouldCreateUser: false, // Only existing portal users
-        },
-      });
-
-      if (error) {
-        // Anti-enumeration: treat "user not found" as success
-        if (
-          error.status === 422 ||
-          error.status === 401 ||
-          error.message?.includes("not found") ||
-          error.message?.includes("not authorized")
-        ) {
-          return { success: true }; // Pretend success to avoid enumeration
-        }
-        return { success: false, error: error.message };
+      // 429 — rate limit
+      if (res.status === 429) {
+        return {
+          success: false,
+          error: "Demasiados intentos. Intenta en un minuto.",
+        };
       }
 
-      return { success: true };
+      // Other non-2xx
+      let body = "";
+      try {
+        body = await res.text();
+      } catch {
+        /* ignore */
+      }
+      return {
+        success: false,
+        error: body || `Error ${res.status} al enviar el enlace`,
+      };
     } catch (error: any) {
-      return { success: false, error: error.message || "Error inesperado" };
+      return {
+        success: false,
+        error: error?.message || "Error de red al enviar el enlace",
+      };
     }
   }
 

@@ -32,6 +32,8 @@ export interface MenuItem {
   icon: string;
   route: string;
   moduleKey?: string;
+  devMode?: boolean;
+  visibleToClients?: boolean;
 }
 
 @Component({
@@ -153,12 +155,26 @@ export class PortalSidebarComponent implements OnInit {
   }
 
   private async loadModules() {
-    const activeModules = await this.clientPortal.getActiveModules();
-    const allowedSet = new Set<string>(activeModules);
+    const moduleInfo = await this.clientPortal.getActiveModules();
+    // Build a map: moduleKey -> { enabled, devMode, visibleToClients }
+    const moduleMap = new Map<string, { enabled: boolean; devMode: boolean; visibleToClients: boolean }>();
+    (moduleInfo || []).forEach((m: any) => {
+      moduleMap.set(m.key, {
+        enabled: m.enabled ?? false,
+        devMode: m.devMode ?? false,
+        visibleToClients: m.visibleToClients ?? true,
+      });
+    });
 
     const filtered = this.allMenuItems.filter((item) => {
       if (!item.moduleKey) return true;
-      return allowedSet.has(item.moduleKey);
+      const info = moduleMap.get(item.moduleKey);
+      if (!info) return false;
+      // DEV mode: invisible for clients
+      if (info.devMode) return false;
+      // visibleToClients = false: hidden from clients
+      if (info.visibleToClients === false) return false;
+      return info.enabled;
     });
 
     this._menuItems.set(filtered);

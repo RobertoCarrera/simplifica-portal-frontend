@@ -331,10 +331,11 @@ export class ClientPortalService {
 
   /**
    * GET /modules via the BFF (client-portal-bff)
-   * Returns the list of active module keys for the client's company.
+   * Returns the list of active modules for the client's company,
+   * including visibility flags (devMode, visibleToClients).
    * Uses direct fetch to allow GET on the edge function.
    */
-  async getActiveModules(): Promise<string[]> {
+  async getActiveModules(): Promise<any[]> {
     try {
       const token = await this.requireAccessToken();
       const anonKey = this.auth.supabaseKey;
@@ -354,9 +355,8 @@ export class ClientPortalService {
       }
 
       const json = await res.json();
-      // BFF v13 returns { modules: [...] } directly (not { data: { modules: [...] } })
-      const modules = json?.data?.modules ?? json?.modules ?? json?.data ?? [];
-      return (Array.isArray(modules) ? modules : []) as string[];
+      const modules = json?.modules ?? json?.data?.modules ?? [];
+      return Array.isArray(modules) ? modules : [];
     } catch (e: any) {
       console.error('[ClientPortalService] getActiveModules failed:', e?.message);
       return [];
