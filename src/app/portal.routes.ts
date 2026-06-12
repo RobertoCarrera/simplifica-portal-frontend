@@ -117,6 +117,19 @@ export const PORTAL_ROUTES: Routes = [
     canActivate: [PortalInviteTokenGuard],
   },
 
+  // Alias for invite route: the CRM send-company-invite function generates
+  // links to /accept-invite (see e867cdf3 "simplify client invite redirect URL").
+  // Keep both paths pointing to the same component so existing email links
+  // and the current /invite URL both work.
+  {
+    path: 'accept-invite',
+    loadComponent: () =>
+      import('./features/portal/invite/portal-invite.component').then(
+        (m) => m.PortalInviteComponent,
+      ),
+    canActivate: [PortalInviteTokenGuard],
+  },
+
   // Catch-all - redirect to dashboard
   { path: '**', redirectTo: 'dashboard' },
 ];
