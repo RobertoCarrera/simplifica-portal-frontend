@@ -339,10 +339,9 @@ export class ClientPortalService {
     try {
       const token = await this.requireAccessToken();
       const anonKey = this.auth.supabaseKey;
-      // client-portal-modules is a single-purpose BFF that returns the
-      // active modules for the authenticated client. It replaces the
-      // client-portal-bff/modules route which had cross-project issues.
-      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules';
+      // client-portal-modules is a multi-tenant BFF. It reads the active
+      // company from the JWT's app_metadata.company_id.
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/modules';
 
       const res = await fetch(bffUrl, {
         method: 'GET',
@@ -363,6 +362,72 @@ export class ClientPortalService {
     } catch (e: any) {
       console.error('[ClientPortalService] getActiveModules failed:', e?.message);
       return [];
+    }
+  }
+
+  /**
+   * List companies the current user belongs to.
+   */
+  async getCompanies(): Promise<Array<{ id: string; name: string; isActive: boolean }>> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/companies';
+
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`companies endpoint returned ${res.status}`);
+      }
+
+      const json = await res.json();
+      const companies = json?.companies ?? json?.data?.companies ?? [];
+      return Array.isArray(companies) ? companies : [];
+    } catch (e: any) {
+      console.error('[ClientPortalService] getCompanies failed:', e?.message);
+      return [];
+    }
+  }
+
+  /**
+   * Switch the user's active company. Updates app_metadata.company_id in
+   * the BFF, then refreshes the session so the JWT carries the new claim.
+   * Returns true on success.
+   */
+  async switchCompany(companyId: string): Promise<boolean> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/select-company';
+
+      const res = await fetch(bffUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ company_id: companyId }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`select-company returned ${res.status}`);
+      }
+
+      // The BFF has updated app_metadata.company_id. Refresh the Supabase
+      // session so the new JWT includes the new claim.
+      const newSession = await this.auth.refreshSession();
+      return newSession !== null;
+    } catch (e: any) {
+      console.error('[ClientPortalService] switchCompany failed:', e?.message);
+      return false;
     }
   }
 }

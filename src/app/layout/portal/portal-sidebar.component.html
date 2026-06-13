@@ -60,6 +60,51 @@
     </button>
   }
 
+  <!-- Company switcher (multi-tenant) -->
+  @if (!isCollapsed() && hasMultipleCompanies()) {
+    <div class="px-2 py-2 border-b border-gray-200 dark:border-gray-700 relative">
+      <button
+        (click)="toggleCompanySwitcher()"
+        class="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
+        [disabled]="switchingCompany()"
+        [title]="'sidebar.cambiarEmpresa' | transloco"
+      >
+        <div class="flex items-center gap-2 min-w-0 flex-1">
+          <lucide-icon name="building2" [size]="16" class="flex-shrink-0"></lucide-icon>
+          <span class="truncate text-left">{{ activeCompanyName() || 'Empresa' }}</span>
+        </div>
+        <lucide-icon
+          name="chevron-down"
+          [size]="14"
+          class="flex-shrink-0 transition-transform"
+          [class.rotate-180]="companySwitcherOpen()"
+        ></lucide-icon>
+      </button>
+
+      @if (companySwitcherOpen()) {
+        <div
+          class="absolute left-2 right-2 mt-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto"
+        >
+          @for (company of companies(); track company.id) {
+            <button
+              (click)="selectCompany(company.id)"
+              class="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+              [disabled]="switchingCompany()"
+            >
+              <div class="flex items-center gap-2 min-w-0 flex-1">
+                <lucide-icon name="building2" [size]="14" class="flex-shrink-0"></lucide-icon>
+                <span class="truncate">{{ company.name }}</span>
+              </div>
+              @if (company.isActive) {
+                <lucide-icon name="check" [size]="14" class="flex-shrink-0 text-green-600"></lucide-icon>
+              }
+            </button>
+          }
+        </div>
+      }
+    </div>
+  }
+
   <!-- Navigation -->
   <nav class="flex-1 px-2 py-4 space-y-1 bg-white dark:bg-gray-800 overflow-y-auto overflow-x-hidden">
     @for (item of menuItems(); track item.id) {

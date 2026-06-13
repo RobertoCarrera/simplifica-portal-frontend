@@ -53,6 +53,9 @@ export class PortalAuthService implements IPortalAuth {
 
   // Signals
   authState = signal<boolean>(false);
+  // Active company for multi-tenant clients. Read from the JWT's
+  // app_metadata.company_id and refreshed by switchCompany().
+  activeCompanyId = signal<string | null>(null);
 
   // Observables públicos
   currentUser$ = this.currentUserSubject.asObservable();
@@ -60,6 +63,13 @@ export class PortalAuthService implements IPortalAuth {
   currentClient$: Observable<PortalClientUser | null> =
     this.portalUserSubject.asObservable();
   loading$ = this.loadingSubject.asObservable();
+
+  /** Extract the active company_id from the user's app_metadata on the JWT. */
+  private resolveActiveCompanyId(user: User | null): string | null {
+    if (!user) return null;
+    const meta = (user as any).app_metadata as { company_id?: string } | undefined;
+    return meta?.company_id ?? null;
+  }
 
   constructor() {
     this.initializeClient();
@@ -127,6 +137,7 @@ export class PortalAuthService implements IPortalAuth {
     this.loadingSubject.next(true);
     this.currentUserSubject.next(user);
     this.authState.set(true);
+    this.activeCompanyId.set(this.resolveActiveCompanyId(user));
 
     try {
       // Fetch portal user profile from client_portal_users + users
@@ -205,6 +216,7 @@ export class PortalAuthService implements IPortalAuth {
     this.currentUserSubject.next(null);
     this.portalUserSubject.next(null);
     this.authState.set(false);
+    this.activeCompanyId.set(null);
     this.stopSessionTimer();
     try { sessionStorage.removeItem(PortalAuthService.SESSION_START_KEY); } catch { /* noop */ }
   }
@@ -345,6 +357,28 @@ export class PortalAuthService implements IPortalAuth {
       await this.supabase.auth.signOut();
     } catch (error) {
       console.warn("⚠️ PortalAuth: Error during logout:", error);
+    }
+  }
+
+  /**
+   * Force a refresh of the Supabase session so the JWT (and therefore
+   * `app_metadata.company_id`) is re-issued. Called by ClientPortalService
+   * after a successful POST /select-company.
+   */
+  async refreshSession(): Promise<Session | null> {
+    try {
+      const { data, error } = await this.supabase.auth.refreshSession();
+      if (error) {
+        console.warn('⚠️ PortalAuth: refreshSession failed:', error);
+        return null;
+      }
+      if (data.session?.user) {
+        await this.setCurrentUser(data.session.user);
+      }
+      return data.session;
+    } catch (e) {
+      console.warn('⚠️ PortalAuth: refreshSession threw:', e);
+      return null;
     }
   }
 

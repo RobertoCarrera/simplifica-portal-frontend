@@ -21,6 +21,9 @@ import {
   MessageCircle,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Building2,
+  Check,
 } from 'lucide-angular';
 import { SidebarStateService } from '../../core/services/sidebar-state.service';
 import { PortalAuthService } from '../../core/services/portal-auth.service';
@@ -34,6 +37,12 @@ export interface MenuItem {
   moduleKey?: string;
   devMode?: boolean;
   visibleToClients?: boolean;
+}
+
+interface CompanyOption {
+  id: string;
+  name: string;
+  isActive: boolean;
 }
 
 @Component({
@@ -64,6 +73,9 @@ export interface MenuItem {
         MessageCircle,
         ChevronLeft,
         ChevronRight,
+        ChevronDown,
+        Building2,
+        Check,
       }),
     },
   ],
@@ -83,6 +95,17 @@ export class PortalSidebarComponent implements OnInit {
   private _menuItems = signal<MenuItem[]>([]);
   readonly menuItems = this._menuItems.asReadonly();
 
+  // Multi-tenant company switcher
+  readonly companies = signal<CompanyOption[]>([]);
+  readonly activeCompanyId = this.portalAuth.activeCompanyId;
+  readonly activeCompanyName = computed(() => {
+    const id = this.activeCompanyId();
+    return this.companies().find((c) => c.id === id)?.name ?? '';
+  });
+  readonly companySwitcherOpen = signal<boolean>(false);
+  readonly switchingCompany = signal<boolean>(false);
+  readonly hasMultipleCompanies = computed(() => this.companies().length > 1);
+
   // Tooltip state for collapsed sidebar
   hoveredLabel: string = '';
   tooltipTop: number = 0;
@@ -95,7 +118,6 @@ export class PortalSidebarComponent implements OnInit {
     FileText,
     Receipt,
     Wrench,
-    Settings,
     LogOut,
     Smartphone,
     Calendar,
@@ -103,6 +125,9 @@ export class PortalSidebarComponent implements OnInit {
     MessageCircle,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
+    Building2,
+    Check,
   };
 
   // All possible menu items for portal clients — routes must match portal.routes.ts
@@ -133,7 +158,7 @@ export class PortalSidebarComponent implements OnInit {
   }
 
   getUserCompany(): string {
-    return this.portalUser()?.company_name || '';
+    return this.activeCompanyName() || this.portalUser()?.company_name || '';
   }
 
   ngOnInit() {
@@ -144,6 +169,7 @@ export class PortalSidebarComponent implements OnInit {
       this.sidebarState.loadSavedState();
     }
     this.loadModules();
+    this.loadCompanies();
   }
 
   @HostListener('window:resize', ['$event'])
@@ -156,7 +182,6 @@ export class PortalSidebarComponent implements OnInit {
 
   private async loadModules() {
     const moduleInfo = await this.clientPortal.getActiveModules();
-    // Build a map: moduleKey -> { enabled, devMode, visibleToClients }
     const moduleMap = new Map<string, { enabled: boolean; devMode: boolean; visibleToClients: boolean }>();
     (moduleInfo || []).forEach((m: any) => {
       moduleMap.set(m.key, {
@@ -170,14 +195,46 @@ export class PortalSidebarComponent implements OnInit {
       if (!item.moduleKey) return true;
       const info = moduleMap.get(item.moduleKey);
       if (!info) return false;
-      // DEV mode: invisible for clients
       if (info.devMode) return false;
-      // visibleToClients = false: hidden from clients
       if (info.visibleToClients === false) return false;
       return info.enabled;
     });
 
     this._menuItems.set(filtered);
+  }
+
+  private async loadCompanies() {
+    const list = await this.clientPortal.getCompanies();
+    this.companies.set(list);
+  }
+
+  toggleCompanySwitcher() {
+    if (this.switchingCompany()) return;
+    this.companySwitcherOpen.update((v) => !v);
+  }
+
+  closeCompanySwitcher() {
+    this.companySwitcherOpen.set(false);
+  }
+
+  async selectCompany(companyId: string) {
+    if (this.switchingCompany()) return;
+    if (companyId === this.activeCompanyId()) {
+      this.closeCompanySwitcher();
+      return;
+    }
+    this.switchingCompany.set(true);
+    const ok = await this.clientPortal.switchCompany(companyId);
+    this.switchingCompany.set(false);
+    if (ok) {
+      // Refresh local state: mark new company active, reload modules
+      const updated = this.companies().map((c) => ({ ...c, isActive: c.id === companyId }));
+      this.companies.set(updated);
+      this.companySwitcherOpen.set(false);
+      await this.loadModules();
+    } else {
+      console.error('[PortalSidebar] switchCompany failed');
+    }
   }
 
   isMobile(): boolean {
