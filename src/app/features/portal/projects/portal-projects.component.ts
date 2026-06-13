@@ -35,9 +35,9 @@ interface Stage {
   standalone: true,
   imports: [CommonModule, RouterModule, FormsModule, TranslocoModule, PortalProjectCardComponent],
   template: `
-    <div class="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div class="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
       <!-- Header -->
-      <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <div class="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div class="px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div class="flex items-center space-x-4">
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Proyectos</h1>
@@ -107,7 +107,7 @@ interface Stage {
       </div>
 
       <!-- Content area (with FAB anchored to bottom-right, like the CRM) -->
-      <div class="flex-1 overflow-hidden relative">
+      <div class="flex-1 min-h-0 overflow-hidden relative">
         @if (loading()) {
           <div class="p-6 text-gray-600 dark:text-gray-400">Cargando proyectos…</div>
         } @else if (filtered().length === 0 && !showCreate()) {
@@ -120,10 +120,10 @@ interface Stage {
           </div>
         } @else {
           @if (view() === 'kanban') {
-            <div class="flex-1 overflow-x-auto p-4 h-full">
+            <div class="h-full overflow-x-auto overflow-y-hidden p-4">
               <div class="flex gap-4 h-full">
                 @for (stage of stages(); track stage.id) {
-                  <div class="flex-shrink-0 w-72 bg-gray-100 dark:bg-gray-800 rounded-lg p-3 flex flex-col max-h-full">
+                  <div class="flex-shrink-0 w-72 h-full bg-gray-100 dark:bg-gray-800 rounded-lg p-3 flex flex-col">
                     <div class="flex items-center justify-between mb-3">
                       <h3 class="font-semibold text-sm text-gray-700 dark:text-gray-200 uppercase tracking-wide">
                         {{ stage.name }}
