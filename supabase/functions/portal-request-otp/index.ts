@@ -25,6 +25,26 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 const PUBLIC_SITE_URL =
   Deno.env.get('PUBLIC_SITE_URL') ?? 'https://portal.simplificacrm.es';
 
+/**
+ * Resolve the email-redirect base URL.
+ *
+ *   - If the request Origin is a localhost URL, use that origin as the base.
+ *     This lets developers test the OTP flow locally without touching env vars
+ *     or the Supabase dashboard redirect allowlist (per-origin only).
+ *   - Otherwise fall back to PUBLIC_SITE_URL (prod).
+ *
+ * Why not just use PUBLIC_SITE_URL for everything: production users would get
+ * a magic link pointing to localhost. We only opt-in to localhost when the
+ * caller is the local dev server itself.
+ */
+function resolveRedirectBase(req: Request): string {
+  const origin = req.headers.get('origin') ?? '';
+  // Only trust localhost for redirect — never accept arbitrary upstream hosts.
+  const m = origin.match(/^http:\/\/localhost(:\d+)?$/);
+  if (m) return origin;
+  return PUBLIC_SITE_URL;
+}
+
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const RATE_LIMIT = 5;
@@ -202,11 +222,12 @@ serve(async (req: Request) => {
 
   // ── Dispatch the magic link via service_role ────────────────────────────────
   try {
+    const redirectBase = resolveRedirectBase(req);
     const { error: otpErr } = await admin.auth.signInWithOtp({
       email,
       options: {
         shouldCreateUser: false,
-        emailRedirectTo: `${PUBLIC_SITE_URL}/auth/callback`,
+        emailRedirectTo: `${redirectBase}/auth/callback`,
       },
     });
 
