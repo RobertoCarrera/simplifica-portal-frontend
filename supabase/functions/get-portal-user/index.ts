@@ -92,13 +92,18 @@ serve(async (req: Request) => {
     auth: { persistSession: false },
   });
 
-  // 1) Portal user record (the only one we trust to identify the user as a portal client)
-  const { data: portalUser, error: portalErr } = await admin
+  // 1) Portal user record (the only one we trust to identify the user as a portal client).
+  //
+  // Multi-tenant: a single auth user can have multiple client_portal_users rows
+  // (one per company). We pick the active company from the JWT
+  // (`app_metadata.company_id`) if set; otherwise the first active row by
+  // created_at is the fallback.
+  const { data: allPortalRows, error: portalErr } = await admin
     .from('client_portal_users')
-    .select('id, company_id, client_id, email, auth_user_id, company_name, is_active')
+    .select('id, company_id, client_id, email, auth_user_id, company_name, is_active, created_at')
     .eq('auth_user_id', authUserId)
     .eq('is_active', true)
-    .maybeSingle();
+    .order('created_at', { ascending: true });
 
   if (portalErr) {
     console.error('[get-portal-user] client_portal_users query failed:', portalErr);
@@ -108,12 +113,31 @@ serve(async (req: Request) => {
     });
   }
 
-  if (!portalUser) {
+  if (!allPortalRows || allPortalRows.length === 0) {
     return new Response(JSON.stringify({ error: 'No portal user found' }), {
       status: 404,
       headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' },
     });
   }
+
+  // Allow the frontend to override the active company via ?company_id= or
+  // body.company_id. Useful after a switch where the frontend wants the
+  // new active company's portal user without having refreshed the JWT yet.
+  const url = new URL(req.url);
+  const overrideCompanyId =
+    url.searchParams.get('company_id') ||
+    (await req.clone().json().catch(() => null))?.company_id ||
+    null;
+
+  const appMetadataCompanyId =
+    (userData.user.app_metadata as { company_id?: string } | undefined)?.company_id ?? null;
+
+  const portalUser =
+    (overrideCompanyId &&
+      allPortalRows.find((r) => r.company_id === overrideCompanyId)) ||
+    (appMetadataCompanyId &&
+      allPortalRows.find((r) => r.company_id === appMetadataCompanyId)) ||
+    allPortalRows[0];
 
   // 2) Public app user (for name/surname)
   const { data: appUser } = await admin
@@ -156,3 +180,4 @@ serve(async (req: Request) => {
     headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' },
   });
 });
+
