@@ -197,13 +197,19 @@ serve(async (req: Request) => {
   // If the email does not belong to an active portal client, return success
   // without sending anything. This prevents an attacker from probing which
   // emails are registered.
+  //
+  // Multi-tenant: a single email can map to multiple client_portal_users rows
+  // (one per company). We only need to confirm "does this email belong to at
+  // least one active row?". Use limit(1) instead of maybeSingle() to avoid
+  // the "multiple rows returned" error that maybeSingle throws when more
+  // than one row matches.
   try {
-    const { data: clientRow, error: lookupErr } = await admin
+    const { data: rows, error: lookupErr } = await admin
       .from('client_portal_users')
       .select('id')
       .eq('email', email)
       .eq('is_active', true)
-      .maybeSingle();
+      .limit(1);
 
     if (lookupErr) {
       console.error('[portal-request-otp] client_portal_users lookup failed:', lookupErr.message);
@@ -211,7 +217,7 @@ serve(async (req: Request) => {
       return jsonResponse(200, { success: true }, corsHeaders);
     }
 
-    if (!clientRow) {
+    if (!rows || rows.length === 0) {
       // Unknown / inactive email — anti-enumeration: pretend success.
       return jsonResponse(200, { success: true }, corsHeaders);
     }
