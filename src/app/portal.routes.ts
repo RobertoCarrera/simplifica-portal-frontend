@@ -104,6 +104,21 @@ export const PORTAL_ROUTES: Routes = [
             (m) => m.PortalSettingsComponent,
           ),
       },
+      // Projects (Proyectos) — portal client can list / create their own
+      {
+        path: 'projects',
+        loadComponent: () =>
+          import('./features/portal/projects/portal-projects.component').then(
+            (m) => m.PortalProjectsComponent,
+          ),
+      },
+      {
+        path: 'projects/:id',
+        loadComponent: () =>
+          import('./features/portal/projects/portal-project-detail.component').then(
+            (m) => m.PortalProjectDetailComponent,
+          ),
+      },
     ],
   },
 

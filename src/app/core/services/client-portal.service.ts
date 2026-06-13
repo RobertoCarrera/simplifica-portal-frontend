@@ -430,4 +430,112 @@ export class ClientPortalService {
       return false;
     }
   }
+
+  /**
+   * List the current client's projects in the active company.
+   * Multi-tenant: server forces client_id and company_id from the JWT, so the
+   * client only sees projects it owns in the company it is currently in.
+   */
+  async getProjects(): Promise<{ data: any[]; error?: any }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/projects';
+
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`projects endpoint returned ${res.status}`);
+      }
+
+      const json = await res.json();
+      const data = json?.data ?? [];
+      return { data: Array.isArray(data) ? data : [] };
+    } catch (e: any) {
+      console.error('[ClientPortalService] getProjects failed:', e?.message);
+      return { data: [], error: { message: e?.message || 'getProjects failed' } };
+    }
+  }
+
+  /**
+   * Read one project (with its tasks) by id. Returns null when not found or
+   * when the project does not belong to the current client/company.
+   */
+  async getProject(id: string): Promise<{ data: { project: any; tasks: any[] } | null; error?: any }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + `/functions/v1/client-portal-modules/projects/${encodeURIComponent(id)}`;
+
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (res.status === 404) {
+        return { data: null };
+      }
+      if (!res.ok) {
+        throw new Error(`project endpoint returned ${res.status}`);
+      }
+
+      const json = await res.json();
+      return { data: json?.data ?? null };
+    } catch (e: any) {
+      console.error('[ClientPortalService] getProject failed:', e?.message);
+      return { data: null, error: { message: e?.message || 'getProject failed' } };
+    }
+  }
+
+  /**
+   * Create a project owned by the current client in the active company.
+   * Only `name`, `description`, `priority`, `start_date`, `end_date` are
+   * accepted from the request — client_id and company_id are forced by the
+   * BFF so the client cannot inject them.
+   */
+  async createProject(input: {
+    name: string;
+    description?: string | null;
+    priority?: 'low' | 'medium' | 'high' | 'critical';
+    start_date?: string | null;
+    end_date?: string | null;
+  }): Promise<{ data: any | null; error?: any }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/projects';
+
+      const res = await fetch(bffUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `create-project returned ${res.status}`);
+      }
+
+      const json = await res.json();
+      return { data: json?.data ?? null };
+    } catch (e: any) {
+      console.error('[ClientPortalService] createProject failed:', e?.message);
+      return { data: null, error: { message: e?.message || 'createProject failed' } };
+    }
+  }
 }
