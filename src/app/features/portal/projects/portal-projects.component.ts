@@ -4,6 +4,10 @@ import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { TranslocoModule } from '@jsverse/transloco';
 import { ClientPortalService } from '../../../core/services/client-portal.service';
+import {
+  PortalProjectCardComponent,
+  PortalProjectCardData,
+} from './portal-project-card.component';
 
 type ViewMode = 'kanban' | 'list' | 'timeline';
 
@@ -29,7 +33,7 @@ interface Stage {
 @Component({
   selector: 'app-portal-projects',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, TranslocoModule],
+  imports: [CommonModule, RouterModule, FormsModule, TranslocoModule, PortalProjectCardComponent],
   template: `
     <div class="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
       <!-- Header -->
@@ -68,15 +72,7 @@ interface Stage {
             </div>
           </div>
           <div class="flex items-center space-x-2">
-            <button
-              (click)="toggleCreate()"
-              class="w-9 h-9 flex items-center justify-center rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-all"
-              title="Nuevo proyecto"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
-              </svg>
-            </button>
+            <!-- Filter triggers moved to filter bar -->
           </div>
         </div>
 
@@ -110,7 +106,7 @@ interface Stage {
         </div>
       </div>
 
-      <!-- Content area -->
+      <!-- Content area (with FAB anchored to bottom-right, like the CRM) -->
       <div class="flex-1 overflow-hidden relative">
         @if (loading()) {
           <div class="p-6 text-gray-600 dark:text-gray-400">Cargando proyectos…</div>
@@ -138,28 +134,8 @@ interface Stage {
                     </div>
                     <div class="flex-1 overflow-y-auto space-y-2">
                       @for (p of projectsByStage(stage.id); track p.id) {
-                        <a
-                          [routerLink]="['/projects', p.id]"
-                          class="block bg-white dark:bg-gray-700 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow border border-gray-200 dark:border-gray-600"
-                        >
-                          <div class="flex items-start justify-between gap-2 mb-1">
-                            <h4 class="font-medium text-sm text-gray-900 dark:text-white line-clamp-2 flex-1">
-                              {{ p.name }}
-                            </h4>
-                            <span [class]="priorityClass(p.priority)" class="text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">
-                              {{ priorityLabel(p.priority) }}
-                            </span>
-                          </div>
-                          @if (p.description) {
-                            <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-1">
-                              {{ p.description }}
-                            </p>
-                          }
-                          @if (p.end_date) {
-                            <p class="text-[10px] text-gray-500 mt-1">
-                              Fin: {{ p.end_date | date }}
-                            </p>
-                          }
+                        <a [routerLink]="['/projects', p.id]" class="block">
+                          <app-portal-project-card [project]="p"></app-portal-project-card>
                         </a>
                       } @empty {
                         <p class="text-xs text-gray-400 text-center py-4">Sin proyectos</p>
@@ -176,9 +152,8 @@ interface Stage {
                     </div>
                     <div class="flex-1 overflow-y-auto space-y-2">
                       @for (p of projectsByStage(null); track p.id) {
-                        <a [routerLink]="['/projects', p.id]" class="block bg-white dark:bg-gray-700 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow border border-gray-200 dark:border-gray-600">
-                          <h4 class="font-medium text-sm text-gray-900 dark:text-white">{{ p.name }}</h4>
-                          @if (p.description) {<p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{{ p.description }}</p>}
+                        <a [routerLink]="['/projects', p.id]" class="block">
+                          <app-portal-project-card [project]="p"></app-portal-project-card>
                         </a>
                       }
                     </div>
@@ -255,6 +230,17 @@ interface Stage {
             </div>
           }
         }
+
+        <!-- Floating Action Button: Nuevo Proyecto (matches the CRM style) -->
+        <button
+          (click)="toggleCreate()"
+          class="absolute bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 hover:shadow-xl active:scale-95 transition-all flex items-center justify-center z-30"
+          title="Nuevo Proyecto"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+          </svg>
+        </button>
       </div>
 
       <!-- Create project modal -->
