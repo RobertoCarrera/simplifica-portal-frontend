@@ -116,6 +116,40 @@ export class ClientPortalService {
     return this.auth.requireAccessToken();
   }
 
+  /**
+   * List bookings/appointments for the current company.
+   * The BFF maps the public_bookings table and accepts ?include_past=true to
+   * skip the upcoming-only filter. When omitted, defaults to upcoming only.
+   */
+  async listAppointments(includePast = false): Promise<{ data: any[]; error?: any }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/appointments' + (includePast ? '?include_past=true' : '');
+
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`appointments BFF returned ${res.status}`);
+      }
+
+      const json = await res.json();
+      return { data: json?.data ?? [], error: null };
+    } catch (e: any) {
+      return {
+        data: [],
+        error: { message: e?.message || 'listAppointments failed' },
+      };
+    }
+  }
+
   async listTickets(): Promise<{ data: any[]; error?: any }> {
     try {
       const token = await this.requireAccessToken();

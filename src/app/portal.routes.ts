@@ -119,6 +119,30 @@ export const PORTAL_ROUTES: Routes = [
             (m) => m.PortalProjectDetailComponent,
           ),
       },
+      // Notifications (placeholder structure, BFF endpoint pending)
+      {
+        path: 'notifications',
+        loadComponent: () =>
+          import('./features/portal/notifications/portal-notifications.component').then(
+            (m) => m.PortalNotificationsComponent,
+          ),
+      },
+      // Chat (placeholder structure, real-time pending)
+      {
+        path: 'chat',
+        loadComponent: () =>
+          import('./features/portal/chat/portal-chat.component').then(
+            (m) => m.PortalChatComponent,
+          ),
+      },
+      // Reservas (wired to BFF /appointments)
+      {
+        path: 'reservas',
+        loadComponent: () =>
+          import('./features/portal/reservas/portal-reservas.component').then(
+            (m) => m.PortalReservasComponent,
+          ),
+      },
     ],
   },
 
