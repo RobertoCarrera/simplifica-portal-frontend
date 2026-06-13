@@ -17,7 +17,7 @@ interface ProjectDetail {
   stage_id?: string | null;
   is_archived?: boolean | null;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 interface ProjectTask {
@@ -29,7 +29,7 @@ interface ProjectTask {
   assigned_to?: string | null;
   position?: number | null;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 interface ProjectComment {
@@ -38,7 +38,7 @@ interface ProjectComment {
   client_id: string | null;
   content: string;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 interface ProjectFile {
@@ -307,7 +307,7 @@ export class PortalProjectDetailComponent implements OnInit {
       this.loading.set(false);
       return;
     }
-    const { data } = await this.portal.getProjectDetail(id);
+    const { data, error } = await this.portal.getProjectDetail(id);
     if (data) {
       this.project.set(data.project);
       this.tasks.set(data.tasks ?? []);

@@ -629,7 +629,11 @@ export class ClientPortalService {
       });
 
       if (res.status === 404) return { data: null };
-      if (!res.ok) throw new Error(`project detail endpoint returned ${res.status}`);
+      if (!res.ok) {
+        let bodyText = '';
+        try { bodyText = await res.text(); } catch {}
+        throw new Error(`project detail endpoint returned ${res.status}: ${bodyText.substring(0, 500)}`);
+      }
 
       const json = await res.json();
       return { data: json?.data ?? null };
