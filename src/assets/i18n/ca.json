@@ -12,6 +12,14 @@
     "reservas": "Reserves",
     "configuracion": "Configuració"
   },
+  "sidebar": {
+    "expandir": "Expandir",
+    "colapsar": "Contraure",
+    "cerrarSesion": "Tancar sessió",
+    "cambiarEmpresa": "Canviar empresa",
+    "cambiando": "Canviant...",
+    "sinEmpresas": "No hi ha empreses disponibles"
+  },
   "portal": {
     "menu": {
       "dashboard": "Dashboard",

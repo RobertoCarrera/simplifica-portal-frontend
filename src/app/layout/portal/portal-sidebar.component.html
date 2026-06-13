@@ -60,51 +60,6 @@
     </button>
   }
 
-  <!-- Company switcher (multi-tenant) -->
-  @if (!isCollapsed() && hasMultipleCompanies()) {
-    <div class="px-2 py-2 border-b border-gray-200 dark:border-gray-700 relative">
-      <button
-        (click)="toggleCompanySwitcher()"
-        class="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
-        [disabled]="switchingCompany()"
-        [title]="'sidebar.cambiarEmpresa' | transloco"
-      >
-        <div class="flex items-center gap-2 min-w-0 flex-1">
-          <lucide-icon name="building2" [size]="16" class="flex-shrink-0"></lucide-icon>
-          <span class="truncate text-left">{{ activeCompanyName() || 'Empresa' }}</span>
-        </div>
-        <lucide-icon
-          name="chevron-down"
-          [size]="14"
-          class="flex-shrink-0 transition-transform"
-          [class.rotate-180]="companySwitcherOpen()"
-        ></lucide-icon>
-      </button>
-
-      @if (companySwitcherOpen()) {
-        <div
-          class="absolute left-2 right-2 mt-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto"
-        >
-          @for (company of companies(); track company.id) {
-            <button
-              (click)="selectCompany(company.id)"
-              class="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
-              [disabled]="switchingCompany()"
-            >
-              <div class="flex items-center gap-2 min-w-0 flex-1">
-                <lucide-icon name="building2" [size]="14" class="flex-shrink-0"></lucide-icon>
-                <span class="truncate">{{ company.name }}</span>
-              </div>
-              @if (company.isActive) {
-                <lucide-icon name="check" [size]="14" class="flex-shrink-0 text-green-600"></lucide-icon>
-              }
-            </button>
-          }
-        </div>
-      }
-    </div>
-  }
-
   <!-- Navigation -->
   <nav class="flex-1 px-2 py-4 space-y-1 bg-white dark:bg-gray-800 overflow-y-auto overflow-x-hidden">
     @for (item of menuItems(); track item.id) {
@@ -142,19 +97,89 @@
     <!-- User profile row -->
     <div class="user-profile-row flex items-center justify-between mt-3">
       @if (!isCollapsed()) {
-        <div class="flex items-center">
-          <div class="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+        <div class="flex items-center min-w-0 flex-1">
+          <div class="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0">
             <span class="text-white font-medium text-sm">{{ getUserInitial() }}</span>
           </div>
-          <div class="ml-3">
-            <p class="text-sm font-bold text-gray-900 dark:text-white truncate max-w-[140px]">
-              {{ getUserDisplayName() }}
-            </p>
-            @if (getUserCompany()) {
+          <div class="ml-3 min-w-0 flex-1">
+            <!-- Company switcher trigger (always visible, like CRM) -->
+            <div class="relative">
+              <div
+                (click)="toggleCompanySwitcher()"
+                class="cursor-pointer flex items-center hover:opacity-80 transition-opacity"
+                [title]="'sidebar.cambiarEmpresa' | transloco"
+              >
+                <p
+                  class="text-sm font-bold text-gray-900 dark:text-white truncate max-w-[140px]"
+                  [title]="activeCompanyName() || getUserDisplayName()"
+                >
+                  {{ activeCompanyName() || getUserDisplayName() }}
+                </p>
+                <lucide-icon
+                  name="chevron-down"
+                  [size]="14"
+                  class="ml-1 text-gray-400 flex-shrink-0 transition-transform"
+                  [class.rotate-180]="companySwitcherOpen()"
+                ></lucide-icon>
+              </div>
+
+              <!-- User subtext -->
               <p class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[140px]">
-                {{ getUserCompany() }}
+                {{ getUserDisplayName() }}
               </p>
-            }
+
+              <!-- Dropdown -->
+              @if (companySwitcherOpen()) {
+                <div
+                  class="absolute bottom-full left-0 mb-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl overflow-hidden z-[100] max-h-[360px] flex flex-col"
+                >
+                  <!-- Header -->
+                  <div class="px-4 py-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      {{ 'sidebar.cambiarEmpresa' | transloco }}
+                    </span>
+                  </div>
+
+                  <!-- Companies list -->
+                  <div class="overflow-y-auto flex-1">
+                    @for (company of companies(); track company.id) {
+                      <button
+                        (click)="selectCompany(company.id)"
+                        class="w-full text-left px-4 py-3 text-sm flex items-center hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors border-b border-gray-100 dark:border-gray-700 last:border-0"
+                        [ngClass]="{ 'bg-blue-50 dark:bg-blue-900/10': company.isActive }"
+                        [disabled]="switchingCompany()"
+                        type="button"
+                      >
+                        <div class="flex-1 min-w-0">
+                          <div
+                            class="font-semibold truncate"
+                            [ngClass]="{ 'text-blue-600 dark:text-blue-400': company.isActive }"
+                          >
+                            {{ company.name }}
+                          </div>
+                          <div class="text-xs text-gray-500">
+                            {{ switchingCompany() && company.id !== activeCompanyId() ? ('sidebar.cambiando' | transloco) : '' }}
+                          </div>
+                        </div>
+                        @if (company.isActive) {
+                          <lucide-icon name="check" [size]="18" class="text-blue-500 flex-shrink-0"></lucide-icon>
+                        }
+                      </button>
+                    } @empty {
+                      <div class="px-4 py-6 text-center text-xs text-gray-500">
+                        {{ 'sidebar.sinEmpresas' | transloco }}
+                      </div>
+                    }
+                  </div>
+                </div>
+
+                <!-- Backdrop to close -->
+                <div
+                  class="fixed inset-0 z-40 bg-transparent"
+                  (click)="closeCompanySwitcher()"
+                ></div>
+              }
+            </div>
           </div>
         </div>
       }
@@ -162,7 +187,7 @@
       <!-- Logout button -->
       <button
         (click)="logout()"
-        class="logout-btn p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 transition-colors"
+        class="logout-btn p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 transition-colors flex-shrink-0"
         [title]="'sidebar.cerrarSesion' | transloco"
         [class.justify-center]="isCollapsed()"
       >

@@ -12,6 +12,14 @@
     "reservas": "Reservas",
     "configuracion": "Configuración"
   },
+  "sidebar": {
+    "expandir": "Expandir",
+    "colapsar": "Colapsar",
+    "cerrarSesion": "Cerrar sesión",
+    "cambiarEmpresa": "Cambiar empresa",
+    "cambiando": "Cambiando...",
+    "sinEmpresas": "No hay empresas disponibles"
+  },
   "portal": {
     "menu": {
       "dashboard": "Dashboard",

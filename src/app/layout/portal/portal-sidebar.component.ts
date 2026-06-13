@@ -100,11 +100,14 @@ export class PortalSidebarComponent implements OnInit {
   readonly activeCompanyId = this.portalAuth.activeCompanyId;
   readonly activeCompanyName = computed(() => {
     const id = this.activeCompanyId();
-    return this.companies().find((c) => c.id === id)?.name ?? '';
+    const fromList = this.companies().find((c) => c.id === id)?.name;
+    if (fromList) return fromList;
+    // Fallback: when the company list is not loaded yet, show the company
+    // name from the current portal user so the footer is never empty.
+    return this.portalUser()?.company_name ?? '';
   });
   readonly companySwitcherOpen = signal<boolean>(false);
   readonly switchingCompany = signal<boolean>(false);
-  readonly hasMultipleCompanies = computed(() => this.companies().length > 1);
 
   // Tooltip state for collapsed sidebar
   hoveredLabel: string = '';
@@ -232,6 +235,13 @@ export class PortalSidebarComponent implements OnInit {
       this.companies.set(updated);
       this.companySwitcherOpen.set(false);
       await this.loadModules();
+      // Soft reload of the current page so scoped data (invoices, quotes,
+      // tickets, profile) refetches for the new active company without
+      // requiring the user to navigate manually.
+      const currentUrl = this.router.url;
+      this.router.navigateByUrl('/', { skipLocationChange: true }).then(() => {
+        this.router.navigateByUrl(currentUrl);
+      });
     } else {
       console.error('[PortalSidebar] switchCompany failed');
     }
