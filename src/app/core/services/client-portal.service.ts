@@ -572,4 +572,233 @@ export class ClientPortalService {
       return { data: null, error: { message: e?.message || 'createProject failed' } };
     }
   }
+
+  /**
+   * List projects with optional filters. Mirrors the CRM sidebar's
+   * search/priority/archived filters.
+   */
+  async listProjects(filters?: { q?: string; priority?: string; stage_id?: string; include_archived?: boolean }): Promise<{ data: any[]; error?: any }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const params = new URLSearchParams();
+      if (filters?.q) params.set('q', filters.q);
+      if (filters?.priority) params.set('priority', filters.priority);
+      if (filters?.stage_id) params.set('stage_id', filters.stage_id);
+      if (filters?.include_archived) params.set('include_archived', 'true');
+      const qs = params.toString();
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/projects' + (qs ? '?' + qs : '');
+
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) throw new Error(`projects endpoint returned ${res.status}`);
+      const json = await res.json();
+      return { data: json?.data ?? [] };
+    } catch (e: any) {
+      console.error('[ClientPortalService] listProjects failed:', e?.message);
+      return { data: [], error: { message: e?.message || 'listProjects failed' } };
+    }
+  }
+
+  /**
+   * Read the project detail (project + tasks + comments + files + permissions).
+   */
+  async getProjectDetail(id: string): Promise<{
+    data: { project: any; tasks: any[]; comments: any[]; files: any[]; permissions: any } | null;
+    error?: any;
+  }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + `/functions/v1/client-portal-modules/projects/${encodeURIComponent(id)}`;
+
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (res.status === 404) return { data: null };
+      if (!res.ok) throw new Error(`project detail endpoint returned ${res.status}`);
+
+      const json = await res.json();
+      return { data: json?.data ?? null };
+    } catch (e: any) {
+      console.error('[ClientPortalService] getProjectDetail failed:', e?.message);
+      return { data: null, error: { message: e?.message || 'getProjectDetail failed' } };
+    }
+  }
+
+  /** Get the project stages (kanban columns) for the current company. */
+  async getStages(): Promise<{ data: Array<{ id: string; name: string; position: number }>; error?: any }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/stages';
+
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) throw new Error(`stages endpoint returned ${res.status}`);
+      const json = await res.json();
+      return { data: json?.stages ?? [] };
+    } catch (e: any) {
+      console.error('[ClientPortalService] getStages failed:', e?.message);
+      return { data: [], error: { message: e?.message || 'getStages failed' } };
+    }
+  }
+
+  /** Get the project permissions template for the current company. */
+  async getPermissions(): Promise<{ data: any; error?: any }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/permissions';
+
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) throw new Error(`permissions endpoint returned ${res.status}`);
+      const json = await res.json();
+      return { data: json?.permissions ?? {} };
+    } catch (e: any) {
+      console.error('[ClientPortalService] getPermissions failed:', e?.message);
+      return { data: {}, error: { message: e?.message || 'getPermissions failed' } };
+    }
+  }
+
+  /** Create a task in a project. */
+  async createTask(projectId: string, input: { title: string; due_date?: string | null }): Promise<{ data: any | null; error?: any }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + `/functions/v1/client-portal-modules/projects/${encodeURIComponent(projectId)}/tasks`;
+
+      const res = await fetch(bffUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `create-task returned ${res.status}`);
+      }
+      const json = await res.json();
+      return { data: json?.data ?? null };
+    } catch (e: any) {
+      console.error('[ClientPortalService] createTask failed:', e?.message);
+      return { data: null, error: { message: e?.message || 'createTask failed' } };
+    }
+  }
+
+  /** Update a task (toggle complete, rename, set due_date). */
+  async updateTask(projectId: string, taskId: string, patch: { title?: string; is_completed?: boolean; due_date?: string | null }): Promise<{ success: boolean; error?: any }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + `/functions/v1/client-portal-modules/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`;
+
+      const res = await fetch(bffUrl, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(patch),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `update-task returned ${res.status}`);
+      }
+      return { success: true };
+    } catch (e: any) {
+      console.error('[ClientPortalService] updateTask failed:', e?.message);
+      return { success: false, error: { message: e?.message || 'updateTask failed' } };
+    }
+  }
+
+  /** Delete a task. */
+  async deleteTask(projectId: string, taskId: string): Promise<{ success: boolean; error?: any }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + `/functions/v1/client-portal-modules/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`;
+
+      const res = await fetch(bffUrl, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `delete-task returned ${res.status}`);
+      }
+      return { success: true };
+    } catch (e: any) {
+      console.error('[ClientPortalService] deleteTask failed:', e?.message);
+      return { success: false, error: { message: e?.message || 'deleteTask failed' } };
+    }
+  }
+
+  /** Add a comment to a project. */
+  async addComment(projectId: string, content: string): Promise<{ data: any | null; error?: any }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + `/functions/v1/client-portal-modules/projects/${encodeURIComponent(projectId)}/comments`;
+
+      const res = await fetch(bffUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `add-comment returned ${res.status}`);
+      }
+      const json = await res.json();
+      return { data: json?.data ?? null };
+    } catch (e: any) {
+      console.error('[ClientPortalService] addComment failed:', e?.message);
+      return { data: null, error: { message: e?.message || 'addComment failed' } };
+    }
+  }
 }
