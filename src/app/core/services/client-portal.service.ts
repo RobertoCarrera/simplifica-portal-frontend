@@ -339,7 +339,10 @@ export class ClientPortalService {
     try {
       const token = await this.requireAccessToken();
       const anonKey = this.auth.supabaseKey;
-      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-bff/modules';
+      // client-portal-modules is a single-purpose BFF that returns the
+      // active modules for the authenticated client. It replaces the
+      // client-portal-bff/modules route which had cross-project issues.
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules';
 
       const res = await fetch(bffUrl, {
         method: 'GET',
