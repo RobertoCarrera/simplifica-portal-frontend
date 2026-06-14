@@ -6,6 +6,7 @@ import {
   ClientPortalService,
   PortalService,
   PortalContractedService,
+  PortalServiceVariant,
 } from '../../../core/services/client-portal.service';
 
 @Component({
@@ -119,6 +120,99 @@ import {
                           </span>
                         }
                       </div>
+                    }
+
+                    @if (s.has_variants) {
+                      <details class="mb-3 group" (toggle)="loadVariants(s)">
+                        <summary class="cursor-pointer text-xs text-blue-600 dark:text-blue-400 hover:underline select-none flex items-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                          </svg>
+                          Ver opciones disponibles
+                        </summary>
+                        <div class="mt-2 space-y-2">
+                          @if (variantsLoading(s)) {
+                            <div class="text-xs text-gray-400 py-2">Cargando opciones…</div>
+                          } @else if (getVariantsFor(s).length === 0) {
+                            <div class="text-xs text-gray-400 py-2">No hay opciones disponibles.</div>
+                          } @else {
+                            @for (v of getVariantsFor(s); track v.id) {
+                              <div
+                                class="p-2.5 border rounded-md transition-colors"
+                                [class.border-blue-400]="v.display_config?.highlight"
+                                [class.bg-blue-50]="v.display_config?.highlight"
+                                [class.dark:bg-blue-900]="v.display_config?.highlight && v.display_config?.highlight"
+                                [class.border-gray-200]="!v.display_config?.highlight"
+                                [class.dark:border-gray-700]="!v.display_config?.highlight"
+                              >
+                                <div class="flex items-start justify-between gap-2">
+                                  <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                      <span class="text-sm font-medium text-gray-900 dark:text-white">{{ v.variant_name }}</span>
+                                      @if (v.display_config?.badge) {
+                                        <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 font-medium">
+                                          {{ v.display_config?.badge }}
+                                        </span>
+                                      }
+                                    </div>
+                                    @if (v.features?.included && v.features!.included!.length > 0) {
+                                      <ul class="mt-1 text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+                                        @for (feat of v.features!.included!.slice(0, 3); track feat) {
+                                          <li class="flex items-start gap-1">
+                                            <span class="text-emerald-500">✓</span>
+                                            <span class="line-clamp-1">{{ feat }}</span>
+                                          </li>
+                                        }
+                                      </ul>
+                                    }
+                                  </div>
+                                  <div class="text-right flex-shrink-0">
+                                    @if (v.pricing && v.pricing.length > 0) {
+                                      @for (p of v.pricing; track p.period) {
+                                        <div class="text-xs">
+                                          <div class="font-semibold text-gray-900 dark:text-white">
+                                            {{ formatPrice(p.price) }} EUR
+                                          </div>
+                                          <div class="text-[10px] text-gray-500">{{ variantPeriodLabel(p.period) }}</div>
+                                        </div>
+                                      }
+                                    } @else if (v.base_price != null) {
+                                      <div class="text-xs">
+                                        <div class="font-semibold text-gray-900 dark:text-white">
+                                          {{ formatPrice(v.base_price) }} EUR
+                                        </div>
+                                      </div>
+                                    }
+                                  </div>
+                                </div>
+                                @if (s.allow_direct_contracting) {
+                                  <div class="mt-2 flex flex-wrap gap-1">
+                                    @if (v.pricing && v.pricing.length > 1) {
+                                      @for (p of v.pricing; track p.period) {
+                                        <button
+                                          (click)="openContractModal(s, v, p.period)"
+                                          [disabled]="contracting() === s.id"
+                                          class="text-[10px] px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                                        >
+                                          Contratar ({{ variantPeriodLabel(p.period) }})
+                                        </button>
+                                      }
+                                    } @else {
+                                      <button
+                                        (click)="openContractModal(s, v, v.pracing?.[0]?.period || null)"
+                                        [disabled]="contracting() === s.id"
+                                        class="text-[10px] px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                                      >
+                                        Contratar esta opción
+                                      </button>
+                                    }
+                                  </div>
+                                }
+                              </div>
+                            }
+                          }
+                        </div>
+                      </details>
                     }
 
                     <div class="mt-auto pt-3 flex items-center justify-between gap-2 border-t border-gray-100 dark:border-gray-700">
@@ -354,10 +448,15 @@ export class PortalServicesComponent implements OnInit {
   // Contract modal state
   contractModalOpen = signal<boolean>(false);
   contractModalService = signal<PortalService | null>(null);
+  contractModalVariant = signal<PortalServiceVariant | null>(null);
+  contractModalPricingPeriod = signal<'one-time' | 'monthly' | 'annually' | 'custom' | null>(null);
   contractStartDate = signal<string>(new Date().toISOString().slice(0, 10));
   contractRecurrence = signal<'none' | 'monthly' | 'weekly' | 'yearly'>('none');
   contractRecurrenceDay = signal<number | null>(null);
   contractRecurrenceEnd = signal<string | null>(null);
+
+  // Variants cache: serviceId → { loading, list, error }
+  variantsByService = signal<Record<string, { loading: boolean; list: PortalServiceVariant[]; error?: string }>>({});
 
   async ngOnInit() {
     this.loading.set(true);
@@ -370,9 +469,11 @@ export class PortalServicesComponent implements OnInit {
     this.loading.set(false);
   }
 
-  openContractModal(s: PortalService) {
+  openContractModal(s: PortalService, variant?: PortalServiceVariant, pricingPeriod?: 'one-time' | 'monthly' | 'annually' | 'custom') {
     if (!s.allow_direct_contracting) return;
     this.contractModalService.set(s);
+    this.contractModalVariant.set(variant ?? null);
+    this.contractModalPricingPeriod.set(pricingPeriod ?? null);
     this.contractStartDate.set(new Date().toISOString().slice(0, 10));
     this.contractRecurrence.set('none');
     this.contractRecurrenceDay.set(null);
@@ -384,6 +485,8 @@ export class PortalServicesComponent implements OnInit {
   closeContractModal() {
     this.contractModalOpen.set(false);
     this.contractModalService.set(null);
+    this.contractModalVariant.set(null);
+    this.contractModalPricingPeriod.set(null);
   }
 
   async confirmContract() {
@@ -392,8 +495,11 @@ export class PortalServicesComponent implements OnInit {
     this.contracting.set(s.id);
     this.errorMessage.set(null);
     const rec = this.contractRecurrence();
+    const variant = this.contractModalVariant();
     const { data, error } = await this.portal.contractService({
       service_id: s.id,
+      variant_id: variant?.id ?? null,
+      pricing_period: this.contractModalPricingPeriod() ?? null,
       start_date: this.contractStartDate(),
       recurrence_type: rec === 'none' ? null : rec,
       recurrence_day: rec === 'none' ? null : this.contractRecurrenceDay(),
@@ -406,6 +512,49 @@ export class PortalServicesComponent implements OnInit {
       this.closeContractModal();
     } else {
       this.errorMessage.set(error?.message || 'No se pudo contratar el servicio');
+    }
+  }
+
+  getVariantsFor(s: PortalService): PortalServiceVariant[] {
+    return this.variantsByService()[s.id]?.list ?? [];
+  }
+
+  variantsLoading(s: PortalService): boolean {
+    return this.variantsByService()[s.id]?.loading ?? false;
+  }
+
+  async loadVariants(s: PortalService) {
+    if (!s.has_variants) return;
+    const current = this.variantsByService()[s.id];
+    if (current && (current.list.length > 0 || current.loading)) return;
+    this.variantsByService.set({
+      ...this.variantsByService(),
+      [s.id]: { loading: true, list: [] },
+    });
+    const { data } = await this.portal.listServiceVariants(s.id);
+    this.variantsByService.set({
+      ...this.variantsByService(),
+      [s.id]: { loading: false, list: data?.variants ?? [] },
+    });
+  }
+
+  variantPrice(v: PortalServiceVariant, period?: 'one-time' | 'monthly' | 'annually' | 'custom' | null): number | null {
+    if (Array.isArray(v.pricing) && v.pricing.length > 0) {
+      const match = period ? v.pricing.find((p) => p?.period === period) : v.pricing[0];
+      if (match && typeof match.price !== 'undefined') return match.price;
+      if (v.pricing[0] && typeof v.pricing[0].price !== 'undefined') return v.pricing[0].price;
+    }
+    if (typeof v.base_price === 'number') return v.base_price;
+    return null;
+  }
+
+  variantPeriodLabel(p: string): string {
+    switch (p) {
+      case 'one-time': return 'Pago único';
+      case 'monthly': return 'Mensual';
+      case 'annually': return 'Anual';
+      case 'custom': return 'Personalizado';
+      default: return p;
     }
   }
 

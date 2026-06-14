@@ -158,6 +158,35 @@ export interface PortalContractedService {
   updated_at?: string;
 }
 
+export interface PortalServiceVariantPricing {
+  period: 'one-time' | 'monthly' | 'annually' | 'custom';
+  price: number;
+  currency?: string;
+}
+
+export interface PortalServiceVariant {
+  id: string;
+  service_id: string;
+  variant_name: string;
+  base_price?: number | null;
+  pricing?: PortalServiceVariantPricing[] | null;
+  features?: {
+    included?: string[];
+    excluded?: string[];
+    limits?: Record<string, any>;
+  } | null;
+  display_config?: {
+    highlight?: boolean;
+    badge?: string | null;
+    color?: string | null;
+  } | null;
+  is_active?: boolean;
+  is_hidden?: boolean;
+  sort_order?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
 /**
  * ClientPortalService — Service for portal client data operations.
  *
@@ -798,12 +827,54 @@ export class ClientPortalService {
   }
 
   /**
+   * List the variants of a service the client can contract. Returns empty list
+   * if the service has no variants or if it's not contractable.
+   */
+  async listServiceVariants(serviceId: string): Promise<{
+    data: { has_variants: boolean; variants: PortalServiceVariant[] };
+    error?: any;
+  }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + `/functions/v1/client-portal-modules/services/${encodeURIComponent(serviceId)}/variants`;
+
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`variants endpoint returned ${res.status}: ${txt.substring(0, 500)}`);
+      }
+      const json = await res.json();
+      return {
+        data: {
+          has_variants: !!json?.has_variants,
+          variants: json?.variants ?? [],
+        },
+      };
+    } catch (e: any) {
+      console.error('[ClientPortalService] listServiceVariants failed:', e?.message);
+      return { data: { has_variants: false, variants: [] }, error: { message: e?.message || 'listServiceVariants failed' } };
+    }
+  }
+
+  /**
    * Contract a service for the current client. Returns the new contracted_services
    * row. The BFF validates that the service is `is_public = true`, `is_bookable = true`,
-   * and `allow_direct_contracting = true` before inserting.
+   * and `allow_direct_contracting = true` before inserting. If a `variant_id` is
+   * provided, the BFF uses the variant's name and price.
    */
   async contractService(payload: {
     service_id: string;
+    variant_id?: string | null;
+    pricing_period?: 'one-time' | 'monthly' | 'annually' | 'custom' | null;
     start_date?: string | null;
     recurrence_type?: 'monthly' | 'weekly' | 'yearly' | null;
     recurrence_day?: number | null;
