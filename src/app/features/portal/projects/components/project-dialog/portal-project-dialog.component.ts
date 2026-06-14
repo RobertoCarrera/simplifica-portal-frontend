@@ -16,6 +16,8 @@ import {
   PortalPropertiesProject,
   PortalPropertiesStage,
 } from './components/portal-project-dialog-properties.component';
+import { PortalProjectDialogCommentsComponent } from './components/portal-project-dialog-comments.component';
+import { PortalProjectDialogActivityComponent } from './components/portal-project-dialog-activity.component';
 
 type Tab = PortalDialogTab;
 
@@ -70,6 +72,8 @@ interface PortalDetail {
     PortalProjectDialogHeaderComponent,
     PortalProjectDialogTabsNavComponent,
     PortalProjectDialogPropertiesComponent,
+    PortalProjectDialogCommentsComponent,
+    PortalProjectDialogActivityComponent,
   ],
   template: `
     <div class="h-full flex flex-col bg-white dark:bg-gray-800">
@@ -208,43 +212,11 @@ interface PortalDetail {
             }
 
             @case ('comments') {
-              <div class="max-w-3xl mx-auto p-6 space-y-4">
-                @if (perms()?.client_can_comment) {
-                  <form (ngSubmit)="addComment()" class="space-y-2">
-                    <textarea
-                      [(ngModel)]="newComment"
-                      name="newComment"
-                      rows="3"
-                      placeholder="Escribe un comentario…"
-                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                      [disabled]="addingComment()"
-                    ></textarea>
-                    <div class="flex justify-end">
-                      <button
-                        type="submit"
-                        [disabled]="addingComment() || !newComment.trim()"
-                        class="px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        {{ addingComment() ? 'Enviando…' : 'Comentar' }}
-                      </button>
-                    </div>
-                  </form>
-                }
-                @if (comments().length === 0) {
-                  <p class="text-sm text-gray-500 dark:text-gray-400">No hay comentarios todavía.</p>
-                } @else {
-                  <ul class="space-y-3">
-                    @for (c of comments(); track c.id) {
-                      <li class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md p-3">
-                        <p class="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">{{ c.content }}</p>
-                        <p class="text-xs text-gray-500 mt-1">
-                          {{ c.user_id ? 'Equipo' : 'Tú' }} · {{ c.created_at | date: 'short' }}
-                        </p>
-                      </li>
-                    }
-                  </ul>
-                }
-              </div>
+              <app-portal-project-dialog-comments
+                [comments]="comments()"
+                [isLoading]="addingComment()"
+                (commentAdd)="onAddComment($event)"
+              ></app-portal-project-dialog-comments>
             }
 
             @case ('documents') {
@@ -279,7 +251,10 @@ interface PortalDetail {
 
             @case ('activity') {
               <div class="max-w-3xl mx-auto p-6">
-                <p class="text-sm text-gray-500 dark:text-gray-400">El registro de actividad se muestra aquí. Por ahora, mira la pestaña de Comentarios para ver la actividad reciente.</p>
+                <app-portal-project-dialog-activity
+                  [activities]="activities()"
+                  [isLoading]="loadingActivity()"
+                ></app-portal-project-dialog-activity>
               </div>
             }
           }
@@ -302,12 +277,13 @@ export class PortalProjectDialogComponent implements OnInit {
   files = signal<Array<{ id: string; name: string; file_type?: string | null; created_at?: string }>>([]);
   perms = signal<PortalPermissions | null>(null);
   stages = signal<PortalPropertiesStage[]>([]);
+  activities = signal<Array<{ id: string; activity_type: string; details?: any; created_at?: string }>>([]);
+  loadingActivity = signal<boolean>(false);
 
   newTaskTitle = '';
   addingTask = signal<boolean>(false);
   taskError = signal<string | null>(null);
 
-  newComment = '';
   addingComment = signal<boolean>(false);
 
   completedCount = computed(() => this.tasks().filter((t) => t.is_completed).length);
@@ -368,15 +344,13 @@ export class PortalProjectDialogComponent implements OnInit {
     }
   }
 
-  async addComment() {
-    const content = this.newComment.trim();
-    if (!content) return;
+  async onAddComment(content: string) {
+    if (!this.perms()?.client_can_comment) return;
     this.addingComment.set(true);
     const { data, error } = await this.portal.addComment(this.project()!.id, content);
     this.addingComment.set(false);
     if (data) {
       this.comments.set([...this.comments(), data as PortalComment]);
-      this.newComment = '';
     } else {
       alert(error?.message || 'No se pudo agregar el comentario');
     }
