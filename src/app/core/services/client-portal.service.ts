@@ -91,6 +91,24 @@ export interface ClientPortalInvoice {
   items?: any[];
 }
 
+export interface PortalProjectListItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  priority?: 'low' | 'medium' | 'high' | 'critical' | null;
+  stage_id?: string | null;
+  position?: number | null;
+  is_archived?: boolean | null;
+  created_at?: string;
+  client_name?: string;
+  tasks_count?: number;
+  completed_tasks_count?: number;
+  top_tasks?: Array<{ id: string; title: string; is_completed: boolean; position?: number }>;
+  unread_count?: number;
+}
+
 /**
  * ClientPortalService — Service for portal client data operations.
  *

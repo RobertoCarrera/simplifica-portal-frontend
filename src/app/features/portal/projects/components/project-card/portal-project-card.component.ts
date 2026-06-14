@@ -1,42 +1,29 @@
-import { Component, Input, Output, EventEmitter, signal, computed } from '@angular/core';
+import { Component, Input, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
-import { TranslocoModule } from '@jsverse/transloco';
+import { ClientPortalService } from '../../../../../core/services/client-portal.service';
 
 export interface PortalProjectCardData {
   id: string;
   name: string;
   description?: string | null;
-  priority?: 'low' | 'medium' | 'high' | 'critical' | null;
   start_date?: string | null;
   end_date?: string | null;
+  priority?: 'low' | 'medium' | 'high' | 'critical' | null;
   stage_id?: string | null;
+  position?: number | null;
   is_archived?: boolean | null;
-  client_name?: string | null;
+  created_at?: string;
+  client_name?: string;
   tasks_count?: number;
   completed_tasks_count?: number;
-  top_tasks?: Array<{ id: string; title: string; is_completed: boolean }>;
+  top_tasks?: Array<{ id: string; title: string; is_completed: boolean; position?: number }>;
   unread_count?: number;
-  created_at: string;
-  updated_at: string;
 }
 
-/**
- * PortalProjectCardComponent — a visual clone of the CRM's
- * project-card.component.ts, scoped to what the portal client is allowed
- * to see and do:
- *   - No archive / approve buttons (owner/admin only in the CRM).
- *   - No stage move UI (the portal client does not have client_can_move_stage).
- *   - Tasks inside the card are read-only previews; toggling happens in the
- *     detail tab.
- *
- * Layout is intentionally 1:1 with the CRM so the two apps feel like the
- * same product on different sides of the auth boundary.
- */
 @Component({
   selector: 'app-portal-project-card',
   standalone: true,
-  imports: [CommonModule, RouterModule, TranslocoModule],
+  imports: [CommonModule],
   template: `
     <div
       class="group project-card bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md hover:border-blue-200 dark:hover:border-blue-500/30 transition-all duration-200 relative overflow-hidden"
@@ -65,7 +52,7 @@ export interface PortalProjectCardData {
               project.priority === 'critical',
           }"
         >
-          {{ priorityLabel(project.priority) }}
+          {{ getPriorityLabel(project.priority) }}
         </span>
       </div>
 
@@ -76,107 +63,151 @@ export interface PortalProjectCardData {
         {{ project.name || 'Sin nombre' }}
       </h3>
 
-      <!-- Client Name (portal version: we show "Mi proyecto" since the
-           client only ever sees their own projects) -->
+      <!-- Client Name -->
       <div class="flex items-center text-xs text-gray-500 dark:text-gray-400 mb-4">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 mr-1.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-3.5 w-3.5 mr-1.5 opacity-70"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+          />
         </svg>
-        <span class="truncate">{{ project.client_name || 'Mi proyecto' }}</span>
+        <span class="truncate">{{ getClientName() }}</span>
       </div>
 
       <!-- Progress Bar -->
       <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 mb-4 overflow-hidden">
         <div
           class="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
-          [style.width.%]="progress()"
+          [style.width.%]="getProgress()"
         ></div>
       </div>
 
-      <!-- Top tasks preview (read-only in the card; toggling happens in detail) -->
-      @if (topTasks().length > 0) {
+      <!-- Top Tasks -->
+      @if (topTasks.length > 0) {
         <div class="mb-3 space-y-1.5">
-          @for (task of topTasks(); track task.id) {
-            <div class="flex items-start group/task">
+          @for (task of topTasks; track task.id) {
+            <div
+              class="flex items-start group/task cursor-pointer"
+              (click)="toggleTask($event, task)"
+            >
               <div
-                class="mt-0.5 mr-2 flex-shrink-0 text-gray-400 dark:text-gray-500"
+                class="mt-0.5 mr-2 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover/task:text-blue-500 transition-colors"
               >
                 @if (!task.is_completed) {
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke-width="2"/>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke-width="2" />
                   </svg>
                 }
                 @if (task.is_completed) {
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-4 w-4 text-green-500"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                      clip-rule="evenodd"
+                    />
                   </svg>
                 }
               </div>
               <span
-                class="text-xs text-gray-600 dark:text-gray-300 line-through-hover decoration-gray-400 truncate"
-              >{{ task.title }}</span>
+                class="text-xs text-gray-600 dark:text-gray-300 truncate"
+                [class.line-through]="task.is_completed"
+                [class.text-gray-400]="task.is_completed"
+                >{{ task.title }}</span
+              >
             </div>
           }
         </div>
       }
 
-      <!-- Footer: tasks count + days remaining -->
+      <!-- Footer: Tasks & Date -->
       <div
         class="flex items-center justify-between pt-2 border-t border-gray-50 dark:border-gray-700/50"
       >
-        <div class="flex items-center text-xs font-medium" [ngClass]="taskStatusClass()">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        <div class="flex items-center text-xs font-medium" [ngClass]="getTaskStatusClass()">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-4 w-4 mr-1.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           <span>{{ project.completed_tasks_count || 0 }}/{{ project.tasks_count || 0 }}</span>
         </div>
 
         @if (project.end_date) {
           <div class="flex items-center text-xs">
-            <span [ngClass]="daysRemaining().class">
-              {{ daysRemaining().text }}
+            <span [ngClass]="getDaysRemaining().class">
+              {{ getDaysRemaining().text }}
             </span>
           </div>
         }
       </div>
     </div>
   `,
+  styles: [],
 })
-export class PortalProjectCardComponent {
-  @Input({ required: true }) project!: PortalProjectCardData;
-  @Output() cardClick = new EventEmitter<PortalProjectCardData>();
+export class PortalProjectCardComponent implements OnInit {
+  @Input() project!: PortalProjectCardData;
 
-  // Mirror the CRM's "unread comments" badge. The portal does not yet
-  // count unread comments, so we expose this as a signal the parent can
-  // drive if it ever wants to. Default to 0 keeps the badge hidden.
-  unreadCount = signal<number>(0);
+  private portal = inject(ClientPortalService);
+  unreadCount = signal(0);
 
-  // The card itself is read-only in the portal (toggling tasks happens in
-  // the detail tab). We do not emit a click event from the card — the
-  // entire card is wrapped in a routerLink by the parent.
+  ngOnInit() {
+    this.unreadCount.set(this.project.unread_count || 0);
+  }
 
-  topTasks = computed(() => {
-    return (this.project.top_tasks ?? [])
+  get topTasks(): Array<{ id: string; title: string; is_completed: boolean; position?: number }> {
+    if (!this.project.top_tasks) return [];
+    return [...this.project.top_tasks]
       .filter((t) => !t.is_completed)
-      .sort((a, b) => (a.title > b.title ? 1 : -1))
+      .sort((a, b) => (a.position || 0) - (b.position || 0))
       .slice(0, 5);
-  });
+  }
 
-  progress = computed(() => {
-    const total = this.project.tasks_count ?? 0;
-    if (total === 0) return 0;
-    return Math.round(((this.project.completed_tasks_count ?? 0) / total) * 100);
-  });
+  getClientName(): string {
+    return this.project.client_name || 'Mi proyecto';
+  }
 
-  taskStatusClass = computed(() => {
-    const p = this.progress();
-    if (p === 100) return 'text-green-600 dark:text-green-400';
-    if (p > 0) return 'text-blue-600 dark:text-blue-400';
+  getProgress(): number {
+    if (!this.project.tasks_count || this.project.tasks_count === 0) return 0;
+    return Math.round(((this.project.completed_tasks_count || 0) / this.project.tasks_count) * 100);
+  }
+
+  getTaskStatusClass(): string {
+    const progress = this.getProgress();
+    if (progress === 100) return 'text-green-600 dark:text-green-400';
+    if (progress > 0) return 'text-blue-600 dark:text-blue-400';
     return 'text-gray-400 dark:text-gray-500';
-  });
+  }
 
-  priorityLabel(p?: string | null): string {
-    switch (p) {
+  getPriorityLabel(priority?: string | null): string {
+    switch (priority) {
       case 'low': return 'Baja';
       case 'medium': return 'Media';
       case 'high': return 'Alta';
@@ -185,7 +216,7 @@ export class PortalProjectCardComponent {
     }
   }
 
-  daysRemaining = computed<{ text: string; class: string }>(() => {
+  getDaysRemaining(): { text: string; class: string } {
     if (!this.project.end_date) return { text: '', class: '' };
 
     const end = new Date(this.project.end_date);
@@ -201,10 +232,8 @@ export class PortalProjectCardComponent {
     const totalDuration = end.getTime() - start.getTime();
     const elapsedTime = today.getTime() - start.getTime();
     const timeRemaining = end.getTime() - today.getTime();
-
     const diffDays = Math.ceil(timeRemaining / (1000 * 60 * 60 * 24));
 
-    // 1. Late (Overdue) — wine color, matches the CRM
     if (diffDays < 0) {
       return {
         text: `${Math.abs(diffDays)}d retraso`,
@@ -212,7 +241,6 @@ export class PortalProjectCardComponent {
       };
     }
 
-    // 2. Not started or invalid duration
     if (totalDuration <= 0) {
       if (diffDays === 0)
         return {
@@ -225,11 +253,11 @@ export class PortalProjectCardComponent {
       };
     }
 
-    // 3. Percentage remaining
     const percentUsed = Math.max(0, Math.min(100, (elapsedTime / totalDuration) * 100));
     const percentRemaining = 100 - percentUsed;
 
     let colorClass = '';
+
     if (diffDays === 0) {
       colorClass = 'text-red-600 bg-red-50 dark:bg-red-900/30 font-bold';
       return { text: 'Hoy', class: `${colorClass} px-2 py-0.5 rounded` };
@@ -246,5 +274,26 @@ export class PortalProjectCardComponent {
     }
 
     return { text: `${diffDays} días`, class: `${colorClass} px-2 py-0.5 rounded` };
-  });
+  }
+
+  async toggleTask(event: MouseEvent, task: { id: string; is_completed: boolean }) {
+    event.stopPropagation();
+    const newState = !task.is_completed;
+    task.is_completed = newState;
+    if (newState) {
+      this.project.completed_tasks_count = (this.project.completed_tasks_count || 0) + 1;
+    } else {
+      this.project.completed_tasks_count = Math.max(0, (this.project.completed_tasks_count || 0) - 1);
+    }
+    const { success } = await this.portal.updateTask(this.project.id, task.id, { is_completed: newState });
+    if (!success) {
+      // revert
+      task.is_completed = !newState;
+      if (newState) {
+        this.project.completed_tasks_count = Math.max(0, (this.project.completed_tasks_count || 0) - 1);
+      } else {
+        this.project.completed_tasks_count = (this.project.completed_tasks_count || 0) + 1;
+      }
+    }
+  }
 }

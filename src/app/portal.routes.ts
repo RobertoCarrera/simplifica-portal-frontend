@@ -108,15 +108,15 @@ export const PORTAL_ROUTES: Routes = [
       {
         path: 'projects',
         loadComponent: () =>
-          import('./features/portal/projects/portal-projects.component').then(
+          import('./features/portal/projects/projects/portal-projects.component').then(
             (m) => m.PortalProjectsComponent,
           ),
       },
       {
         path: 'projects/:id',
         loadComponent: () =>
-          import('./features/portal/projects/portal-project-detail.component').then(
-            (m) => m.PortalProjectDetailComponent,
+          import('./features/portal/projects/components/project-dialog/portal-project-dialog.component').then(
+            (m) => m.PortalProjectDialogComponent,
           ),
       },
       // Notifications (placeholder structure, BFF endpoint pending)
