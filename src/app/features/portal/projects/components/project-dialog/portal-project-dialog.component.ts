@@ -87,7 +87,7 @@ interface PortalDetail {
       } @else {
         <!-- HEADER -->
         <app-portal-project-dialog-header
-          [project]="project() as unknown as PortalDialogHeaderProject"
+          [project]="headerProject()"
           (close)="goBack()"
         ></app-portal-project-dialog-header>
 
@@ -151,7 +151,7 @@ interface PortalDetail {
 
                 <!-- RIGHT: Sidebar properties -->
                 <app-portal-project-dialog-properties
-                  [project]="project() as unknown as PortalPropertiesProject"
+                  [project]="propertiesProject()"
                   [stages]="stages()"
                   [totalCount]="tasks().length"
                   [completedCount]="completedCount()"
@@ -315,6 +315,14 @@ export class PortalProjectDialogComponent implements OnInit {
 
   goBack() {
     window.history.back();
+  }
+
+  headerProject(): PortalDialogHeaderProject | null {
+    return this.project() as PortalDialogHeaderProject | null;
+  }
+
+  propertiesProject(): PortalPropertiesProject | null {
+    return this.project() as PortalPropertiesProject | null;
   }
 
   async toggleTask(t: PortalTask) {
