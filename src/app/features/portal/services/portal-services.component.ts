@@ -199,7 +199,7 @@ import {
                                       }
                                     } @else {
                                       <button
-                                        (click)="openContractModal(s, v, v.pricing?.[0]?.period as any)"
+                                        (click)="openContractModal(s, v, firstPricingPeriod(v))"
                                         [disabled]="contracting() === s.id"
                                         class="text-[10px] px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
                                       >
@@ -546,6 +546,13 @@ export class PortalServicesComponent implements OnInit {
     }
     if (typeof v.base_price === 'number') return v.base_price;
     return null;
+  }
+
+  firstPricingPeriod(v: PortalServiceVariant): 'one-time' | 'monthly' | 'annually' | 'custom' | undefined {
+    if (Array.isArray(v.pricing) && v.pricing.length > 0 && v.pricing[0]?.period) {
+      return v.pricing[0].period as 'one-time' | 'monthly' | 'annually' | 'custom';
+    }
+    return undefined;
   }
 
   variantPeriodLabel(p: string): string {
