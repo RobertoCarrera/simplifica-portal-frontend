@@ -124,7 +124,7 @@ import {
                     <div class="mt-auto pt-3 flex items-center justify-between gap-2 border-t border-gray-100 dark:border-gray-700">
                       @if (s.allow_direct_contracting) {
                         <button
-                          (click)="contract(s)"
+                          (click)="openContractModal(s)"
                           [disabled]="contracting() === s.id"
                           class="px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
                         >
@@ -214,6 +214,132 @@ import {
         }
       </div>
     </div>
+
+    <!-- CONTRACT MODAL -->
+    @if (contractModalOpen() && contractModalService(); as svc) {
+      <div
+        class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        (click)="closeContractModal()"
+      >
+        <div
+          class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4"
+          (click)="$event.stopPropagation()"
+        >
+          <header class="flex items-start justify-between gap-3">
+            <div class="flex-1 min-w-0">
+              <h3 class="text-lg font-bold text-gray-900 dark:text-white">Contratar servicio</h3>
+              <p class="text-sm text-gray-500 dark:text-gray-400 truncate">{{ svc.name }}</p>
+            </div>
+            <button
+              (click)="closeContractModal()"
+              class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex-shrink-0"
+              title="Cerrar"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </header>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                Fecha de inicio
+              </label>
+              <input
+                type="date"
+                [ngModel]="contractStartDate()"
+                (ngModelChange)="contractStartDate.set($event)"
+                name="contractStartDate"
+                class="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 dark:text-gray-200"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                Recurrencia
+              </label>
+              <div class="grid grid-cols-2 gap-2">
+                @for (opt of recurrenceOptions; track opt.value) {
+                  <label
+                    class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer transition-colors"
+                    [class.border-blue-500]="contractRecurrence() === opt.value"
+                    [class.bg-blue-50]="contractRecurrence() === opt.value"
+                    [class.dark:bg-blue-900/20]="contractRecurrence() === opt.value"
+                    [class.border-gray-200]="contractRecurrence() !== opt.value"
+                    [class.dark:border-gray-700]="contractRecurrence() !== opt.value"
+                  >
+                    <input
+                      type="radio"
+                      [value]="opt.value"
+                      [checked]="contractRecurrence() === opt.value"
+                      (change)="contractRecurrence.set($any(opt.value))"
+                      class="text-blue-600 focus:ring-blue-500"
+                    />
+                    <span class="text-sm text-gray-700 dark:text-gray-200">{{ opt.label }}</span>
+                  </label>
+                }
+              </div>
+            </div>
+
+            @if (contractRecurrence() !== 'none') {
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                    Día de generación
+                  </label>
+                  <input
+                    type="number"
+                    [ngModel]="contractRecurrenceDay()"
+                    (ngModelChange)="contractRecurrenceDay.set($event ? +$event : null)"
+                    name="contractRecurrenceDay"
+                    min="1"
+                    [max]="contractRecurrence() === 'monthly' ? 31 : contractRecurrence() === 'weekly' ? 7 : 366"
+                    placeholder="1-31"
+                    class="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 dark:text-gray-200"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                    Fin (opcional)
+                  </label>
+                  <input
+                    type="date"
+                    [ngModel]="contractRecurrenceEnd()"
+                    (ngModelChange)="contractRecurrenceEnd.set($event || null)"
+                    name="contractRecurrenceEnd"
+                    class="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 dark:text-gray-200"
+                  />
+                </div>
+              </div>
+            }
+
+            @if (errorMessage()) {
+              <p class="text-sm text-red-600">{{ errorMessage() }}</p>
+            }
+          </div>
+
+          <footer class="flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+            <button
+              (click)="closeContractModal()"
+              class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100"
+            >
+              Cancelar
+            </button>
+            <button
+              (click)="confirmContract()"
+              [disabled]="contracting() === svc.id"
+              class="px-5 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
+            >
+              @if (contracting() === svc.id) {
+                <span class="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full"></span>
+              }
+              Confirmar contratación
+            </button>
+          </footer>
+        </div>
+      </div>
+    }
   `,
 })
 export class PortalServicesComponent implements OnInit {
@@ -224,6 +350,14 @@ export class PortalServicesComponent implements OnInit {
   contracted = signal<PortalContractedService[]>([]);
   contracting = signal<string | null>(null);
   errorMessage = signal<string | null>(null);
+
+  // Contract modal state
+  contractModalOpen = signal<boolean>(false);
+  contractModalService = signal<PortalService | null>(null);
+  contractStartDate = signal<string>(new Date().toISOString().slice(0, 10));
+  contractRecurrence = signal<'none' | 'monthly' | 'weekly' | 'yearly'>('none');
+  contractRecurrenceDay = signal<number | null>(null);
+  contractRecurrenceEnd = signal<string | null>(null);
 
   async ngOnInit() {
     this.loading.set(true);
@@ -236,21 +370,53 @@ export class PortalServicesComponent implements OnInit {
     this.loading.set(false);
   }
 
-  async contract(s: PortalService) {
+  openContractModal(s: PortalService) {
     if (!s.allow_direct_contracting) return;
-    if (!confirm(`¿Contratar "${s.name}" desde hoy?`)) return;
+    this.contractModalService.set(s);
+    this.contractStartDate.set(new Date().toISOString().slice(0, 10));
+    this.contractRecurrence.set('none');
+    this.contractRecurrenceDay.set(null);
+    this.contractRecurrenceEnd.set(null);
+    this.errorMessage.set(null);
+    this.contractModalOpen.set(true);
+  }
+
+  closeContractModal() {
+    this.contractModalOpen.set(false);
+    this.contractModalService.set(null);
+  }
+
+  async confirmContract() {
+    const s = this.contractModalService();
+    if (!s) return;
     this.contracting.set(s.id);
     this.errorMessage.set(null);
+    const rec = this.contractRecurrence();
     const { data, error } = await this.portal.contractService({
       service_id: s.id,
-      start_date: new Date().toISOString().slice(0, 10),
+      start_date: this.contractStartDate(),
+      recurrence_type: rec === 'none' ? null : rec,
+      recurrence_day: rec === 'none' ? null : this.contractRecurrenceDay(),
+      recurrence_start: rec === 'none' ? null : this.contractStartDate(),
+      recurrence_end: rec === 'none' ? null : this.contractRecurrenceEnd(),
     });
     this.contracting.set(null);
     if (data) {
       this.contracted.set([data, ...this.contracted()]);
+      this.closeContractModal();
     } else {
       this.errorMessage.set(error?.message || 'No se pudo contratar el servicio');
     }
+  }
+
+  // Legacy direct-contract path kept as fallback in case allow_direct_contracting
+  // is true and we want a one-click contract without a modal.
+  async contractDirect(s: PortalService) {
+    if (!s.allow_direct_contracting) return;
+    this.openContractModal(s);
+    // Auto-confirm with no recurrence for the legacy one-click path
+    this.contractRecurrence.set('none');
+    await this.confirmContract();
   }
 
   formatPrice(p?: number | null): string {
@@ -268,6 +434,13 @@ export class PortalServicesComponent implements OnInit {
     const m = min % 60;
     return m ? `${h} h ${m} min` : `${h} h`;
   }
+
+  recurrenceOptions: Array<{ value: 'none' | 'monthly' | 'weekly' | 'yearly'; label: string }> = [
+    { value: 'none', label: 'Puntual' },
+    { value: 'monthly', label: 'Mensual' },
+    { value: 'weekly', label: 'Semanal' },
+    { value: 'yearly', label: 'Anual' },
+  ];
 
   recurrenceLabel(t: string): string {
     switch (t) {

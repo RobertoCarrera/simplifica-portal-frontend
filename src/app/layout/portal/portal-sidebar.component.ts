@@ -140,7 +140,7 @@ export class PortalSidebarComponent implements OnInit {
     { id: 3, label: 'nav.tickets', icon: 'ticket', route: '/citas', moduleKey: 'moduloSAT' },
     { id: 4, label: 'nav.presupuestos', icon: 'file-text', route: '/presupuestos', moduleKey: 'moduloPresupuestos' },
     { id: 5, label: 'nav.facturas', icon: 'receipt', route: '/facturas', moduleKey: 'moduloFacturas' },
-    { id: 6, label: 'nav.servicios', icon: 'wrench', route: '/servicios', moduleKey: 'moduloServicios' },
+    { id: 6, label: 'nav.servicios', icon: 'wrench', route: '/services', moduleKey: 'moduloServicios' },
     { id: 7, label: 'nav.dispositivos', icon: 'smartphone', route: '/dispositivos', moduleKey: 'moduloSAT' },
     { id: 8, label: 'nav.proyectos', icon: 'layout-grid', route: '/projects', moduleKey: 'moduloProyectos' },
     { id: 9, label: 'nav.chat', icon: 'message-circle', route: '/chat', moduleKey: 'moduloChat' },
