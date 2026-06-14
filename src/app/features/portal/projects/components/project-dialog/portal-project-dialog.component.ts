@@ -3,8 +3,16 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { ClientPortalService } from '../../../../../core/services/client-portal.service';
+import {
+  PortalProjectDialogHeaderComponent,
+  PortalDialogHeaderProject,
+} from './components/portal-project-dialog-header.component';
+import {
+  PortalProjectDialogTabsNavComponent,
+  PortalDialogTab,
+} from './components/portal-project-dialog-tabs-nav.component';
 
-type Tab = 'details' | 'tasks' | 'comments' | 'documents' | 'activity';
+type Tab = PortalDialogTab;
 
 interface PortalTask {
   id: string;
@@ -50,7 +58,7 @@ interface PortalDetail {
 @Component({
   selector: 'app-portal-project-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, PortalProjectDialogHeaderComponent, PortalProjectDialogTabsNavComponent],
   template: `
     <div class="h-full flex flex-col bg-white dark:bg-gray-800">
       @if (loading()) {
@@ -62,54 +70,19 @@ interface PortalDetail {
         </div>
       } @else {
         <!-- HEADER -->
-        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-          <div class="flex items-center gap-3 flex-1 min-w-0">
-            <a routerLink="/projects" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" title="Volver">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-            </a>
-            <div class="flex-1 min-w-0">
-              <h2 class="text-xl font-bold text-gray-900 dark:text-white truncate">{{ project()!.name }}</h2>
-              @if (project()!.description) {
-                <p class="text-sm text-gray-500 dark:text-gray-400 truncate">{{ project()!.description }}</p>
-              }
-            </div>
-            <span [class]="priorityClass(project()!.priority)" class="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0">
-              {{ priorityLabel(project()!.priority) }}
-            </span>
-          </div>
-        </div>
+        <app-portal-project-dialog-header
+          [project]="project() as unknown as PortalDialogHeaderProject"
+          (close)="goBack()"
+        ></app-portal-project-dialog-header>
 
         <!-- TABS NAV -->
-        <div class="border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <div class="px-6 flex gap-1 overflow-x-auto">
-            <button (click)="setTab('details')" [class]="tabClass('details')">
-              Detalles
-            </button>
-            <button (click)="setTab('tasks')" [class]="tabClass('tasks')">
-              Tareas
-              @if (tasks().length > 0) {
-                <span class="ml-1.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs px-1.5 py-0.5 rounded-full">{{ tasks().length }}</span>
-              }
-            </button>
-            <button (click)="setTab('comments')" [class]="tabClass('comments')">
-              Comentarios
-              @if (comments().length > 0) {
-                <span class="ml-1.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs px-1.5 py-0.5 rounded-full">{{ comments().length }}</span>
-              }
-            </button>
-            <button (click)="setTab('documents')" [class]="tabClass('documents')">
-              Documentos
-              @if (files().length > 0) {
-                <span class="ml-1.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs px-1.5 py-0.5 rounded-full">{{ files().length }}</span>
-              }
-            </button>
-            <button (click)="setTab('activity')" [class]="tabClass('activity')">
-              Actividad
-            </button>
-          </div>
-        </div>
+        <app-portal-project-dialog-tabs-nav
+          [activeTab]="activeTab()"
+          [tasksCount]="tasks().length"
+          [commentsCount]="comments().length"
+          [filesCount]="files().length"
+          (tabChange)="setTab($event)"
+        ></app-portal-project-dialog-tabs-nav>
 
         <!-- BODY -->
         <div class="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
@@ -372,14 +345,8 @@ export class PortalProjectDialogComponent implements OnInit {
     this.activeTab.set(t);
   }
 
-  tabClass(t: Tab): string {
-    const active = this.activeTab() === t;
-    return [
-      'px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
-      active
-        ? 'text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400'
-        : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600',
-    ].join(' ');
+  goBack() {
+    window.history.back();
   }
 
   priorityClass(p?: string | null): string {
