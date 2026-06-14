@@ -109,6 +109,55 @@ export interface PortalProjectListItem {
   unread_count?: number;
 }
 
+export interface PortalService {
+  id: string;
+  name: string;
+  description?: string | null;
+  base_price?: number | null;
+  estimated_hours?: number | null;
+  category?: string | null;
+  is_active?: boolean;
+  is_public?: boolean;
+  is_bookable?: boolean;
+  allow_direct_contracting?: boolean;
+  features?: string | null;
+  min_quantity?: number | null;
+  max_quantity?: number | null;
+  duration_minutes?: number | null;
+  buffer_minutes?: number | null;
+  booking_color?: string | null;
+  tax_rate?: number | null;
+  unit_type?: string | null;
+  tags?: string[] | null;
+  has_variants?: boolean;
+  display_price?: number | null;
+  display_price_label?: string | null;
+  display_price_from_variants?: boolean;
+  display_hours?: number | null;
+  display_hourly_rate?: number | null;
+  company_id?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PortalContractedService {
+  id: string;
+  client_id: string;
+  company_id: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  currency: string;
+  start_date: string;
+  status: 'active' | 'paused' | 'cancelled';
+  recurrence_type?: 'monthly' | 'weekly' | 'yearly' | null;
+  recurrence_day?: number | null;
+  recurrence_start?: string | null;
+  recurrence_end?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 /**
  * ClientPortalService — Service for portal client data operations.
  *
@@ -708,6 +757,83 @@ export class ClientPortalService {
     } catch (e: any) {
       console.error('[ClientPortalService] getPermissions failed:', e?.message);
       return { data: {}, error: { message: e?.message || 'getPermissions failed' } };
+    }
+  }
+
+  /**
+   * List services for the active company, split into:
+   *  - `available`: services where is_public = true AND is_bookable = true
+   *  - `contracted`: services the current client has already contracted
+   */
+  async listServices(): Promise<{
+    data: { available: PortalService[]; contracted: PortalContractedService[] };
+    error?: any;
+  }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/services';
+
+      const res = await fetch(bffUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) throw new Error(`services endpoint returned ${res.status}`);
+      const json = await res.json();
+      return {
+        data: {
+          available: json?.available ?? [],
+          contracted: json?.contracted ?? [],
+        },
+      };
+    } catch (e: any) {
+      console.error('[ClientPortalService] listServices failed:', e?.message);
+      return { data: { available: [], contracted: [] }, error: { message: e?.message || 'listServices failed' } };
+    }
+  }
+
+  /**
+   * Contract a service for the current client. Returns the new contracted_services
+   * row. The BFF validates that the service is `is_public = true`, `is_bookable = true`,
+   * and `allow_direct_contracting = true` before inserting.
+   */
+  async contractService(payload: {
+    service_id: string;
+    start_date?: string | null;
+    recurrence_type?: 'monthly' | 'weekly' | 'yearly' | null;
+    recurrence_day?: number | null;
+    recurrence_start?: string | null;
+    recurrence_end?: string | null;
+  }): Promise<{ data: PortalContractedService | null; error?: any }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/services/contract';
+
+      const res = await fetch(bffUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`contract service endpoint returned ${res.status}: ${txt.substring(0, 500)}`);
+      }
+      const json = await res.json();
+      return { data: json?.data ?? null };
+    } catch (e: any) {
+      console.error('[ClientPortalService] contractService failed:', e?.message);
+      return { data: null, error: { message: e?.message || 'contractService failed' } };
     }
   }
 

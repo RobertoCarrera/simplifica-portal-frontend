@@ -135,6 +135,14 @@ export const PORTAL_ROUTES: Routes = [
             (m) => m.PortalChatComponent,
           ),
       },
+      // Services (catálogo de la company + contratados del cliente)
+      {
+        path: 'services',
+        loadComponent: () =>
+          import('./features/portal/services/portal-services.component').then(
+            (m) => m.PortalServicesComponent,
+          ),
+      },
       // Reservas (wired to BFF /appointments)
       {
         path: 'reservas',
