@@ -199,7 +199,7 @@ import {
                                       }
                                     } @else {
                                       <button
-                                        (click)="openContractModal(s, v, v.pracing?.[0]?.period || null)"
+                                        (click)="openContractModal(s, v, v.pricing?.[0]?.period as any)"
                                         [disabled]="contracting() === s.id"
                                         class="text-[10px] px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
                                       >
