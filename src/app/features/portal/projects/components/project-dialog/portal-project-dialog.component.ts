@@ -11,6 +11,11 @@ import {
   PortalProjectDialogTabsNavComponent,
   PortalDialogTab,
 } from './components/portal-project-dialog-tabs-nav.component';
+import {
+  PortalProjectDialogPropertiesComponent,
+  PortalPropertiesProject,
+  PortalPropertiesStage,
+} from './components/portal-project-dialog-properties.component';
 
 type Tab = PortalDialogTab;
 
@@ -58,7 +63,14 @@ interface PortalDetail {
 @Component({
   selector: 'app-portal-project-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule, PortalProjectDialogHeaderComponent, PortalProjectDialogTabsNavComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterModule,
+    PortalProjectDialogHeaderComponent,
+    PortalProjectDialogTabsNavComponent,
+    PortalProjectDialogPropertiesComponent,
+  ],
   template: `
     <div class="h-full flex flex-col bg-white dark:bg-gray-800">
       @if (loading()) {
@@ -134,37 +146,12 @@ interface PortalDetail {
                 </div>
 
                 <!-- RIGHT: Sidebar properties -->
-                <div class="w-full md:w-80 p-6 space-y-6">
-                  <div>
-                    <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Prioridad</label>
-                    <span [class]="priorityClass(project()!.priority)" class="text-xs px-2 py-0.5 rounded-full font-medium">
-                      {{ priorityLabel(project()!.priority) }}
-                    </span>
-                  </div>
-                  @if (project()!.start_date) {
-                    <div>
-                      <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Fecha de inicio</label>
-                      <p class="text-sm text-gray-700 dark:text-gray-300">{{ project()!.start_date | date: 'longDate' }}</p>
-                    </div>
-                  }
-                  @if (project()!.end_date) {
-                    <div>
-                      <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Fecha de entrega</label>
-                      <p class="text-sm text-gray-700 dark:text-gray-300">{{ project()!.end_date | date: 'longDate' }}</p>
-                    </div>
-                  }
-                  <div>
-                    <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Progreso</label>
-                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
-                      <div class="bg-blue-500 h-2 rounded-full transition-all duration-500" [style.width.%]="getProgress()"></div>
-                    </div>
-                    <p class="text-xs text-gray-500 mt-1">{{ getProgress() }}% ({{ completedCount() }}/{{ tasks().length }} tareas)</p>
-                  </div>
-                  <div>
-                    <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Creado</label>
-                    <p class="text-sm text-gray-700 dark:text-gray-300">{{ project()!.created_at | date: 'longDate' }}</p>
-                  </div>
-                </div>
+                <app-portal-project-dialog-properties
+                  [project]="project() as unknown as PortalPropertiesProject"
+                  [stages]="stages()"
+                  [totalCount]="tasks().length"
+                  [completedCount]="completedCount()"
+                ></app-portal-project-dialog-properties>
               </div>
             }
 
@@ -314,6 +301,7 @@ export class PortalProjectDialogComponent implements OnInit {
   comments = signal<PortalComment[]>([]);
   files = signal<Array<{ id: string; name: string; file_type?: string | null; created_at?: string }>>([]);
   perms = signal<PortalPermissions | null>(null);
+  stages = signal<PortalPropertiesStage[]>([]);
 
   newTaskTitle = '';
   addingTask = signal<boolean>(false);
@@ -338,6 +326,10 @@ export class PortalProjectDialogComponent implements OnInit {
       this.files.set((data.files ?? []) as Array<{ id: string; name: string; file_type?: string | null; created_at?: string }>);
       this.perms.set(data.permissions as PortalPermissions);
     }
+    const stagesRes = await this.portal.getStages();
+    if (stagesRes.data) {
+      this.stages.set(stagesRes.data as PortalPropertiesStage[]);
+    }
     this.loading.set(false);
   }
 
@@ -347,30 +339,6 @@ export class PortalProjectDialogComponent implements OnInit {
 
   goBack() {
     window.history.back();
-  }
-
-  priorityClass(p?: string | null): string {
-    switch (p) {
-      case 'critical': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
-      case 'high': return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300';
-      case 'low': return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
-      default: return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
-    }
-  }
-
-  priorityLabel(p?: string | null): string {
-    switch (p) {
-      case 'critical': return 'Crítica';
-      case 'high': return 'Alta';
-      case 'low': return 'Baja';
-      default: return 'Media';
-    }
-  }
-
-  getProgress(): number {
-    const total = this.tasks().length;
-    if (total === 0) return 0;
-    return Math.round((this.completedCount() / total) * 100);
   }
 
   async toggleTask(t: PortalTask) {
