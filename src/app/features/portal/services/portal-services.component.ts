@@ -39,7 +39,26 @@ import {
         @if (loading()) {
           <div class="p-8 text-center text-gray-500">Cargando servicios…</div>
         } @else {
-          <!-- AVAILABLE SERVICES -->
+          <!-- DEBUG BANNER (quitar cuando se arregle) -->
+          @if (debugShowRaw() && debugRawResponse()) {
+            <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg px-3 py-2 text-xs font-mono text-amber-900 dark:text-amber-200 mb-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  🔧 DEBUG · <b>available del BFF:</b> {{ debugRawResponse()?.availableCount ?? 0 }}
+                  · <b>contracted del BFF:</b> {{ debugRawResponse()?.contractedCount ?? 0 }}
+                </div>
+                <button
+                  (click)="debugShowRaw.set(false)"
+                  class="text-amber-600 hover:text-amber-800"
+                  title="Ocultar"
+                >✕</button>
+              </div>
+              @if (debugRawResponse()?.availableFirst) {
+                <pre class="mt-1 text-[10px] whitespace-pre-wrap break-all">{{ debugRawResponse()?.availableFirst | json }}</pre>
+              }
+            </div>
+          }
+          <!-- AVAILABLE SERVICIOS -->
           <section>
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Servicios disponibles</h2>
             @if (available().length === 0) {
@@ -444,6 +463,9 @@ export class PortalServicesComponent implements OnInit {
   contracted = signal<PortalContractedService[]>([]);
   contracting = signal<string | null>(null);
   errorMessage = signal<string | null>(null);
+  // DEBUG: raw BFF response to inspect in the UI
+  debugRawResponse = signal<any>(null);
+  debugShowRaw = signal<boolean>(true);
 
   // Contract modal state
   contractModalOpen = signal<boolean>(false);
@@ -464,6 +486,11 @@ export class PortalServicesComponent implements OnInit {
     if (data) {
       this.available.set(data.available ?? []);
       this.contracted.set(data.contracted ?? []);
+      this.debugRawResponse.set({
+        availableCount: data.available?.length ?? 0,
+        contractedCount: data.contracted?.length ?? 0,
+        availableFirst: data.available?.[0] ?? null,
+      });
     }
     if (error) this.errorMessage.set(error.message);
     this.loading.set(false);
