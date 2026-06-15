@@ -466,6 +466,8 @@ export class PortalServicesComponent implements OnInit {
   // DEBUG: raw BFF response to inspect in the UI
   debugRawResponse = signal<any>(null);
   debugShowRaw = signal<boolean>(true);
+  debugCompanyId = signal<string>('');
+  debugClientId = signal<string>('');
 
   // Contract modal state
   contractModalOpen = signal<boolean>(false);
@@ -482,6 +484,10 @@ export class PortalServicesComponent implements OnInit {
 
   async ngOnInit() {
     this.loading.set(true);
+    // DEBUG: capture company/client IDs from auth service for the banner
+    const auth = (this.portal as any).auth;
+    this.debugCompanyId.set(auth?.supabaseUrl || 'unknown');
+    this.debugClientId.set((globalThis as any).__lastServicesResponse ? 'fetched' : 'pending');
     const { data, error } = await this.portal.listServices();
     if (data) {
       this.available.set(data.available ?? []);
@@ -490,6 +496,7 @@ export class PortalServicesComponent implements OnInit {
         availableCount: data.available?.length ?? 0,
         contractedCount: data.contracted?.length ?? 0,
         availableFirst: data.available?.[0] ?? null,
+        rawAvailable: data.available,
       });
     }
     if (error) this.errorMessage.set(error.message);

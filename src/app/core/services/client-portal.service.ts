@@ -814,6 +814,8 @@ export class ClientPortalService {
 
       if (!res.ok) throw new Error(`services endpoint returned ${res.status}`);
       const json = await res.json();
+      // DEBUG: expose raw body to UI for diagnosis
+      (globalThis as any).__lastServicesResponse = json;
       return {
         data: {
           available: json?.available ?? [],
