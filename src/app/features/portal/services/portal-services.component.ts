@@ -44,8 +44,10 @@ import {
             <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg px-3 py-2 text-xs font-mono text-amber-900 dark:text-amber-200 mb-4">
               <div class="flex items-center justify-between">
                 <div>
-                  🔧 DEBUG · <b>available del BFF:</b> {{ debugRawResponse()?.availableCount ?? 0 }}
-                  · <b>contracted del BFF:</b> {{ debugRawResponse()?.contractedCount ?? 0 }}
+                  🔧 DEBUG · <b>available:</b> {{ debugRawResponse()?.availableCount ?? 0 }}
+                  · <b>contracted:</b> {{ debugRawResponse()?.contractedCount ?? 0 }}
+                  · <b>BFF ctx.companyId:</b> {{ debugRawResponse()?.ctx_companyId || '?' }}
+                  · <b>BFF ctx.clientId:</b> {{ debugRawResponse()?.ctx_clientId || '?' }}
                 </div>
                 <button
                   (click)="debugShowRaw.set(false)"
@@ -53,8 +55,11 @@ import {
                   title="Ocultar"
                 >✕</button>
               </div>
-              @if (debugRawResponse()?.availableFirst) {
-                <pre class="mt-1 text-[10px] whitespace-pre-wrap break-all">{{ debugRawResponse()?.availableFirst | json }}</pre>
+              @if (debugRawResponse()?.rawAvailable) {
+                <details class="mt-1">
+                  <summary class="cursor-pointer">Ver raw available ({{ debugRawResponse()?.rawAvailable?.length }})</summary>
+                  <pre class="mt-1 text-[10px] whitespace-pre-wrap break-all">{{ debugRawResponse()?.rawAvailable | json }}</pre>
+                </details>
               }
             </div>
           }
@@ -497,6 +502,8 @@ export class PortalServicesComponent implements OnInit {
         contractedCount: data.contracted?.length ?? 0,
         availableFirst: data.available?.[0] ?? null,
         rawAvailable: data.available,
+        ctx_companyId: (data as any)._debug?.ctx_companyId,
+        ctx_clientId: (data as any)._debug?.ctx_clientId,
       });
     }
     if (error) this.errorMessage.set(error.message);
