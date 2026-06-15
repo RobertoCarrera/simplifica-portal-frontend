@@ -48,6 +48,7 @@ import {
                   · <b>contracted:</b> {{ debugRawResponse()?.contractedCount ?? 0 }}
                   · <b>BFF ctx.companyId:</b> {{ debugRawResponse()?.ctx_companyId || '?' }}
                   · <b>BFF ctx.clientId:</b> {{ debugRawResponse()?.ctx_clientId || '?' }}
+                  · <b>crm_url:</b> {{ debugRawResponse()?.crm_url || '?' }}
                 </div>
                 <button
                   (click)="debugShowRaw.set(false)"
@@ -504,6 +505,8 @@ export class PortalServicesComponent implements OnInit {
         rawAvailable: data.available,
         ctx_companyId: (data as any)._debug?.ctx_companyId,
         ctx_clientId: (data as any)._debug?.ctx_clientId,
+        crm_url: (data as any)._debug?.crm_url,
+        first_available: (data as any)._debug?.first_available,
       });
     }
     if (error) this.errorMessage.set(error.message);
