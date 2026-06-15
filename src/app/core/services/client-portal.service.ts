@@ -820,7 +820,9 @@ export class ClientPortalService {
         data: {
           available: json?.available ?? [],
           contracted: json?.contracted ?? [],
-        },
+          // Pass through _debug if the BFF sent it
+          _debug: json?._debug,
+        } as any,
       };
     } catch (e: any) {
       console.error('[ClientPortalService] listServices failed:', e?.message);
