@@ -123,6 +123,12 @@ serve(async (req: Request) => {
   // Allow the frontend to override the active company via ?company_id= or
   // body.company_id. Useful after a switch where the frontend wants the
   // new active company's portal user without having refreshed the JWT yet.
+  //
+  // SECURITY: the override MUST be in the user's list of memberships. If the
+  // user asks for a company they do not belong to, ignore the override and
+  // fall through to the app_metadata or default-row selection. This prevents
+  // a malicious client from reading another company's portal user via
+  // forged ?company_id=.
   const url = new URL(req.url);
   const overrideCompanyId =
     url.searchParams.get('company_id') ||
