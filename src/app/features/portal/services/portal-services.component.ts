@@ -14,13 +14,13 @@ import {
   standalone: true,
   imports: [CommonModule, FormsModule, RouterModule],
   template: `
-    <div class="h-full flex flex-col bg-gray-50 dark:bg-gray-900 overflow-y-auto">
+    <div class="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
       <!-- Header -->
-      <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div class="px-6 py-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <div class="px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Servicios</h1>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
               Catálogo de servicios disponibles de tu empresa y los que tienes contratados.
             </p>
           </div>
@@ -35,20 +35,42 @@ import {
         </div>
       </div>
 
-      <div class="flex-1 p-6 space-y-10">
+      <div class="flex-1 min-h-0 p-3 flex flex-col gap-3">
         @if (loading()) {
           <div class="p-8 text-center text-gray-500">Cargando servicios…</div>
         } @else {
-          <!-- AVAILABLE SERVICIOS -->
-          <section>
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Servicios disponibles</h2>
-            @if (available().length === 0) {
-              <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center text-gray-500">
-                No hay servicios disponibles para contratar en este momento.
+          <!-- AVAILABLE SERVICIOS PANE -->
+          <section class="flex-1 min-h-0 flex flex-col bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+            <div class="flex-shrink-0 p-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3 flex-wrap">
+              <h2 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                Servicios disponibles
+                <span class="px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-medium">
+                  {{ filteredAvailable().length }} / {{ available().length }}
+                </span>
+              </h2>
+              <div class="ml-auto relative">
+                <input
+                  type="search"
+                  [ngModel]="availableSearch()"
+                  (ngModelChange)="availableSearch.set($event)"
+                  placeholder="Filtrar por nombre o categoría…"
+                  class="pl-8 pr-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg w-64 focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 dark:text-gray-200"
+                />
+                <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
               </div>
-            } @else {
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                @for (s of available(); track s.id) {
+            </div>
+            <div class="flex-1 min-h-0 overflow-y-auto p-4">
+              @if (available().length === 0) {
+                <div class="p-8 text-center text-gray-500">
+                  No hay servicios disponibles para contratar en este momento.
+                </div>
+              } @else if (filteredAvailable().length === 0) {
+                <div class="p-8 text-center text-gray-500">
+                  Ningún servicio coincide con «<b>{{ availableSearch() }}</b>».
+                </div>
+              } @else {
+                <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
+                  @for (s of filteredAvailable(); track s.id) {
                   <article class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 flex flex-col hover:shadow-md transition-shadow">
                     <header class="mb-3">
                       @if (categoryLabel(s); as catName) {
@@ -244,17 +266,38 @@ import {
             }
           </section>
 
-          <!-- CONTRACTED SERVICES -->
-          <section>
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Mis servicios contratados</h2>
-            @if (contracted().length === 0) {
-              <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8 text-center text-gray-500">
-                Aún no tienes servicios contratados. Contrata uno desde la sección superior.
+          <!-- CONTRACTED SERVICES PANE -->
+          <section class="flex-1 min-h-0 flex flex-col bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+            <div class="flex-shrink-0 p-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3 flex-wrap">
+              <h2 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                Mis servicios contratados
+                <span class="px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 font-medium">
+                  {{ filteredContracted().length }} / {{ contracted().length }}
+                </span>
+              </h2>
+              <div class="ml-auto relative">
+                <input
+                  type="search"
+                  [ngModel]="contractedSearch()"
+                  (ngModelChange)="contractedSearch.set($event)"
+                  placeholder="Filtrar…"
+                  class="pl-8 pr-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg w-64 focus:ring-2 focus:ring-emerald-500 outline-none text-gray-700 dark:text-gray-200"
+                />
+                <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
               </div>
-            } @else {
-              <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            </div>
+            <div class="flex-1 min-h-0 overflow-y-auto">
+              @if (contracted().length === 0) {
+                <div class="p-8 text-center text-gray-500">
+                  Aún no tienes servicios contratados. Contrata uno desde la sección superior.
+                </div>
+              } @else if (filteredContracted().length === 0) {
+                <div class="p-8 text-center text-gray-500">
+                  Ningún servicio coincide con «<b>{{ contractedSearch() }}</b>».
+                </div>
+              } @else {
                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead class="bg-gray-50 dark:bg-gray-900/50">
+                  <thead class="bg-gray-50 dark:bg-gray-900/50 sticky top-0">
                     <tr>
                       <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Servicio</th>
                       <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Inicio</th>
@@ -264,7 +307,7 @@ import {
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                    @for (c of contracted(); track c.id) {
+                    @for (c of filteredContracted(); track c.id) {
                       <tr>
                         <td class="px-4 py-3 text-sm">
                           <div class="font-medium text-gray-900 dark:text-white">{{ c.name }}</div>
@@ -302,8 +345,8 @@ import {
                     }
                   </tbody>
                 </table>
-              </div>
-            }
+              }
+            </div>
           </section>
         }
       </div>
@@ -463,6 +506,35 @@ export class PortalServicesComponent implements OnInit {
 
   // Selected variant per service: serviceId → variantId
   selectedVariantByService = signal<Record<string, string>>({});
+
+  // Filter inputs (toolbar search)
+  availableSearch = signal<string>('');
+  contractedSearch = signal<string>('');
+
+  // Filtered lists (computed from raw + search)
+  filteredAvailable = computed(() => {
+    const term = this.availableSearch().trim().toLowerCase();
+    if (!term) return this.available();
+    return this.available().filter((s) => {
+      const cat = this.categoryLabel(s)?.toLowerCase() ?? '';
+      return (
+        s.name?.toLowerCase().includes(term) ||
+        cat.includes(term) ||
+        s.description?.toLowerCase().includes(term)
+      );
+    });
+  });
+
+  filteredContracted = computed(() => {
+    const term = this.contractedSearch().trim().toLowerCase();
+    if (!term) return this.contracted();
+    return this.contracted().filter((c) => {
+      return (
+        c.name?.toLowerCase().includes(term) ||
+        c.description?.toLowerCase().includes(term)
+      );
+    });
+  });
 
   async ngOnInit() {
     this.loading.set(true);
