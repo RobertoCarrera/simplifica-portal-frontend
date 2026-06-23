@@ -42,9 +42,6 @@ import {
           <!-- AVAILABLE SERVICIOS PANE -->
           <section class="flex-1 min-h-0 flex flex-col bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
             <div class="flex-shrink-0 p-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2 flex-wrap">
-              <span class="px-3 py-1 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-xs font-medium">
-                {{ filteredAvailable().length }} / {{ available().length }} disponibles
-              </span>
               @if (availableSearch()) {
                 <button
                   type="button"
@@ -60,7 +57,7 @@ import {
                   [ngModel]="availableSearch()"
                   (ngModelChange)="availableSearch.set($event)"
                   placeholder="Filtrar por nombre o categoría…"
-                  class="pl-8 pr-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg w-64 focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 dark:text-gray-200"
+                  class="pl-8 pr-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg w-72 focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 dark:text-gray-200"
                 />
                 <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
               </div>
@@ -75,7 +72,7 @@ import {
                   Ningún servicio coincide con «<b>{{ availableSearch() }}</b>».
                 </div>
               } @else {
-                <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                   @for (s of filteredAvailable(); track s.id) {
                   <article class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 flex flex-col hover:shadow-md transition-shadow">
                     <header class="mb-3">
@@ -169,7 +166,7 @@ import {
                             <i class="fas fa-check-circle text-blue-500"></i>
                           }
                         </summary>
-                        <div class="mt-2 grid grid-cols-2 gap-1.5">
+                        <div class="mt-2 flex flex-col gap-1.5">
                           @if (variantsLoading(s)) {
                             <div class="col-span-2 text-xs text-gray-400 py-2">Cargando opciones…</div>
                           } @else if (getVariantsFor(s).length === 0) {
@@ -290,79 +287,84 @@ import {
       </div>
     </div>
 
-    <!-- CONTRACTED SERVICES BOTTOM SHEET (overlay) -->
+    <!-- CONTRACTED SERVICES MODAL (overlay) -->
     @if (contractedSheetOpen()) {
       <div
-        class="fixed inset-0 bg-black/50 z-40 flex items-end justify-center"
+        class="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4"
         (click)="contractedSheetOpen.set(false)"
       >
         <div
-          class="bg-white dark:bg-gray-800 w-full max-w-4xl max-h-[80vh] rounded-t-2xl shadow-2xl flex flex-col"
+          class="bg-white dark:bg-gray-800 w-full max-w-3xl max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
           (click)="$event.stopPropagation()"
         >
-          <div class="flex-shrink-0 p-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2 flex-wrap">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              Mis servicios contratados
-              <span class="px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 font-medium">
-                {{ filteredContracted().length }} / {{ contracted().length }}
+          <div class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
+            <div class="flex items-center gap-2 flex-1 min-w-0">
+              <span class="w-9 h-9 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-briefcase text-emerald-600 dark:text-emerald-400"></i>
               </span>
-            </h3>
-            <div class="ml-auto relative flex items-center gap-2">
-              <div class="relative">
-                <input
-                  type="search"
-                  [ngModel]="contractedSearch()"
-                  (ngModelChange)="contractedSearch.set($event)"
-                  placeholder="Filtrar…"
-                  class="pl-8 pr-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg w-56 focus:ring-2 focus:ring-emerald-500 outline-none text-gray-700 dark:text-gray-200"
-                />
-                <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+              <div class="min-w-0">
+                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Mis servicios contratados</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ filteredContracted().length }} de {{ contracted().length }} contratados
+                </p>
               </div>
-              <button
-                type="button"
-                (click)="contractedSheetOpen.set(false)"
-                class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5"
-                title="Cerrar"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
             </div>
+            <div class="relative">
+              <input
+                type="search"
+                [ngModel]="contractedSearch()"
+                (ngModelChange)="contractedSearch.set($event)"
+                placeholder="Filtrar…"
+                class="pl-8 pr-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg w-56 focus:ring-2 focus:ring-emerald-500 outline-none text-gray-700 dark:text-gray-200"
+              />
+              <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+            </div>
+            <button
+              type="button"
+              (click)="contractedSheetOpen.set(false)"
+              class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 flex-shrink-0"
+              title="Cerrar"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
           <div class="flex-1 min-h-0 overflow-y-auto">
             @if (contracted().length === 0) {
-              <div class="p-8 text-center text-gray-500">
-                Aún no tienes servicios contratados. Contrata uno desde la sección superior.
+              <div class="p-12 text-center text-gray-500">
+                <i class="fas fa-briefcase text-4xl text-gray-300 dark:text-gray-600 mb-3"></i>
+                <p>Aún no tienes servicios contratados.</p>
+                <p class="text-sm mt-1">Contrata uno desde la sección superior.</p>
               </div>
             } @else if (filteredContracted().length === 0) {
-              <div class="p-8 text-center text-gray-500">
+              <div class="p-12 text-center text-gray-500">
                 Ningún servicio coincide con «<b>{{ contractedSearch() }}</b>».
               </div>
             } @else {
               <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead class="bg-gray-50 dark:bg-gray-900/50 sticky top-0">
                   <tr>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Servicio</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Inicio</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Recurrencia</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
-                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Precio</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Servicio</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Inicio</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Recurrencia</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Precio</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                   @for (c of filteredContracted(); track c.id) {
-                    <tr>
-                      <td class="px-4 py-3 text-sm">
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/30">
+                      <td class="px-6 py-4 text-sm">
                         <div class="font-medium text-gray-900 dark:text-white">{{ c.name }}</div>
                         @if (c.description) {
-                          <div class="text-xs text-gray-500 line-clamp-1">{{ c.description }}</div>
+                          <div class="text-xs text-gray-500 line-clamp-1 mt-0.5">{{ c.description }}</div>
                         }
                       </td>
-                      <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                      <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
                         {{ c.start_date | date: 'mediumDate' }}
                       </td>
-                      <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                      <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                         @if (c.recurrence_type) {
                           <div class="flex flex-col text-xs">
                             <span class="font-medium">{{ recurrenceLabel(c.recurrence_type) }}</span>
@@ -377,12 +379,12 @@ import {
                           <span class="text-gray-400">Puntual</span>
                         }
                       </td>
-                      <td class="px-4 py-3 text-sm">
+                      <td class="px-6 py-4 text-sm">
                         <span [class]="statusClass(c.status)">
                           {{ statusLabel(c.status) }}
                         </span>
                       </td>
-                      <td class="px-4 py-3 text-sm text-right font-medium text-gray-900 dark:text-white">
+                      <td class="px-6 py-4 text-sm text-right font-semibold text-gray-900 dark:text-white whitespace-nowrap">
                         {{ formatPrice(c.price) }} {{ c.currency }}
                       </td>
                     </tr>
