@@ -88,3 +88,9 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Bottom-sheet slide-up animation (used by services contracted panel) */
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}

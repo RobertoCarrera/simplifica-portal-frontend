@@ -18,19 +18,41 @@ import {
       <!-- Header -->
       <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div class="px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div>
+          <div class="min-w-0">
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Servicios</h1>
             <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
               Catálogo de servicios disponibles de tu empresa y los que tienes contratados.
             </p>
           </div>
-          <div class="flex items-center gap-2 text-xs">
-            <span class="px-3 py-1 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-medium">
-              {{ available().length }} disponibles
-            </span>
-            <span class="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 font-medium">
-              {{ contracted().length }} contratados
-            </span>
+          <div class="flex items-center gap-3 flex-wrap">
+            <div class="flex items-center gap-2 text-xs">
+              <span class="px-3 py-1 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-medium">
+                {{ available().length }} disponibles
+              </span>
+              <span class="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 font-medium">
+                {{ contracted().length }} contratados
+              </span>
+            </div>
+            <div class="relative">
+              <input
+                type="search"
+                [ngModel]="availableSearch()"
+                (ngModelChange)="availableSearch.set($event)"
+                placeholder="Filtrar por nombre o categoría…"
+                class="pl-8 pr-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg w-64 focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 dark:text-gray-200"
+              />
+              <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+              @if (availableSearch()) {
+                <button
+                  type="button"
+                  (click)="availableSearch.set('')"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  title="Limpiar filtro"
+                >
+                  <i class="fas fa-times text-xs"></i>
+                </button>
+              }
+            </div>
           </div>
         </div>
       </div>
@@ -41,27 +63,6 @@ import {
         } @else {
           <!-- AVAILABLE SERVICIOS PANE -->
           <section class="flex-1 min-h-0 flex flex-col bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-            <div class="flex-shrink-0 p-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2 flex-wrap">
-              @if (availableSearch()) {
-                <button
-                  type="button"
-                  (click)="availableSearch.set('')"
-                  class="text-[10px] text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 underline"
-                >
-                  Limpiar filtro
-                </button>
-              }
-              <div class="ml-auto relative">
-                <input
-                  type="search"
-                  [ngModel]="availableSearch()"
-                  (ngModelChange)="availableSearch.set($event)"
-                  placeholder="Filtrar por nombre o categoría…"
-                  class="pl-8 pr-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg w-72 focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 dark:text-gray-200"
-                />
-                <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-              </div>
-            </div>
             <div class="flex-1 min-h-0 overflow-y-auto p-4">
               @if (available().length === 0) {
                 <div class="p-8 text-center text-gray-500">
@@ -287,16 +288,21 @@ import {
       </div>
     </div>
 
-    <!-- CONTRACTED SERVICES MODAL (overlay) -->
+    <!-- CONTRACTED SERVICES BOTTOM SHEET (mobile-first, slides up from bottom) -->
     @if (contractedSheetOpen()) {
       <div
-        class="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4"
+        class="fixed inset-0 z-40"
         (click)="contractedSheetOpen.set(false)"
       >
+        <div class="absolute inset-0 bg-black/50"></div>
         <div
-          class="bg-white dark:bg-gray-800 w-full max-w-3xl max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          class="absolute bottom-0 left-0 right-0 md:left-1/2 md:-translate-x-1/2 md:max-w-3xl md:w-full bg-white dark:bg-gray-800 rounded-t-2xl md:rounded-2xl md:mb-6 shadow-2xl flex flex-col overflow-hidden max-h-[85vh] animate-[slideUp_0.25s_ease-out]"
           (click)="$event.stopPropagation()"
         >
+          <!-- Drag handle for mobile visual cue -->
+          <div class="flex justify-center pt-2 md:hidden">
+            <div class="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+          </div>
           <div class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
             <div class="flex items-center gap-2 flex-1 min-w-0">
               <span class="w-9 h-9 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
