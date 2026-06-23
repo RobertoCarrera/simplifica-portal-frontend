@@ -894,6 +894,7 @@ export class ClientPortalService {
     recurrence_day?: number | null;
     recurrence_start?: string | null;
     recurrence_end?: string | null;
+    payment_method?: 'stripe' | 'paypal' | 'cash' | 'redsys' | null;
   }): Promise<{ data: PortalContractedService | null; error?: any }> {
     try {
       const token = await this.requireAccessToken();

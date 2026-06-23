@@ -371,9 +371,16 @@ import {
                         {{ c.start_date | date: 'mediumDate' }}
                       </td>
                       <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                        @if (c.recurrence_type) {
-                          <div class="flex flex-col text-xs">
-                            <span class="font-medium">{{ recurrenceLabel(c.recurrence_type) }}</span>
+                          @if (c.recurrence_type) {
+                            <div class="flex flex-col text-xs">
+                              <span class="font-medium">
+                                @switch (c.recurrence_type) {
+                                  @case ('monthly') { Mensual }
+                                  @case ('weekly') { Semanal }
+                                  @case ('yearly') { Anual }
+                                  @default { {{ c.recurrence_type }} }
+                                }
+                              </span>
                             @if (c.recurrence_day) {
                               <span class="text-gray-500">día {{ c.recurrence_day }}</span>
                             }
@@ -403,24 +410,38 @@ import {
       </div>
     }
 
-    <!-- CONTRACT MODAL -->
+    <!-- CONTRACT / PAYMENT MODAL -->
     @if (contractModalOpen() && contractModalService(); as svc) {
       <div
-        class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        class="fixed inset-0 z-[1200] flex items-end justify-center p-0 md:p-4"
         (click)="closeContractModal()"
       >
+        <div class="absolute inset-0 bg-black/50"></div>
         <div
-          class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4"
+          class="relative bg-white dark:bg-gray-800 w-full max-w-lg rounded-t-2xl md:rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[90vh] animate-[slideUp_0.25s_ease-out]"
           (click)="$event.stopPropagation()"
         >
-          <header class="flex items-start justify-between gap-3">
-            <div class="flex-1 min-w-0">
-              <h3 class="text-lg font-bold text-gray-900 dark:text-white">Contratar servicio</h3>
-              <p class="text-sm text-gray-500 dark:text-gray-400 truncate">{{ svc.name }}</p>
+          <!-- Drag handle (mobile) -->
+          <div class="flex justify-center pt-2 md:hidden">
+            <div class="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+          </div>
+
+          <header class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
+            <div class="flex items-center gap-2 flex-1 min-w-0">
+              <span class="w-9 h-9 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-credit-card text-blue-600 dark:text-blue-400"></i>
+              </span>
+              <div class="min-w-0">
+                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Contratar y pagar</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {{ svc.name }}@if (contractModalVariant()) { · {{ contractModalVariant()!.variant_name }} }
+                </p>
+              </div>
             </div>
             <button
+              type="button"
               (click)="closeContractModal()"
-              class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex-shrink-0"
+              class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 flex-shrink-0"
               title="Cerrar"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -429,100 +450,108 @@ import {
             </button>
           </header>
 
-          <div class="space-y-4">
-            <div>
-              <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                Fecha de inicio
-              </label>
-              <input
-                type="date"
-                [ngModel]="contractStartDate()"
-                (ngModelChange)="contractStartDate.set($event)"
-                name="contractStartDate"
-                class="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 dark:text-gray-200"
-              />
+          <div class="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
+            <!-- Order summary -->
+            <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 space-y-2 text-sm">
+              <div class="flex items-baseline justify-between">
+                <span class="text-gray-500 dark:text-gray-400">Servicio</span>
+                <span class="text-gray-900 dark:text-white font-medium truncate ml-2">{{ svc.name }}</span>
+              </div>
+              @if (contractModalVariant()) {
+                <div class="flex items-baseline justify-between">
+                  <span class="text-gray-500 dark:text-gray-400">Modalidad</span>
+                  <span class="text-gray-900 dark:text-white font-medium truncate ml-2">
+                    {{ contractModalVariant()!.variant_name }}
+                  </span>
+                </div>
+              }
+              <div class="flex items-baseline justify-between">
+                <span class="text-gray-500 dark:text-gray-400">Fecha de inicio</span>
+                <span class="text-gray-900 dark:text-white font-medium">{{ today() }}</span>
+              </div>
+              <div class="border-t border-gray-200 dark:border-gray-700 pt-2 flex items-baseline justify-between">
+                <span class="text-gray-900 dark:text-white font-semibold">Total a pagar</span>
+                <span class="text-2xl font-bold text-gray-900 dark:text-white">
+                  {{ formatPrice(orderTotal()) }} {{ currencyFor(svc) }}
+                </span>
+              </div>
             </div>
 
+            <!-- Payment methods -->
             <div>
-              <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                Recurrencia
-              </label>
-              <div class="grid grid-cols-2 gap-2">
-                @for (opt of recurrenceOptions; track opt.value) {
-                  <label
-                    class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer transition-colors"
-                    [class.border-blue-500]="contractRecurrence() === opt.value"
-                    [class.bg-blue-50]="contractRecurrence() === opt.value"
-                    [class.dark:bg-blue-900/20]="contractRecurrence() === opt.value"
-                    [class.border-gray-200]="contractRecurrence() !== opt.value"
-                    [class.dark:border-gray-700]="contractRecurrence() !== opt.value"
+              <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                Método de pago
+              </p>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                @for (m of paymentMethods; track m.id) {
+                  <button
+                    type="button"
+                    (click)="paymentMethod.set(m.id)"
+                    [class.border-blue-500]="paymentMethod() === m.id"
+                    [class.bg-blue-50]="paymentMethod() === m.id"
+                    [class.dark:bg-blue-900/20]="paymentMethod() === m.id"
+                    [class.dark:border-blue-400]="paymentMethod() === m.id"
+                    [class.border-gray-200]="paymentMethod() !== m.id"
+                    [class.dark:border-gray-700]="paymentMethod() !== m.id"
+                    class="flex items-center gap-3 p-3 border rounded-lg text-left hover:border-blue-400 transition-colors"
                   >
-                    <input
-                      type="radio"
-                      [value]="opt.value"
-                      [checked]="contractRecurrence() === opt.value"
-                      (change)="contractRecurrence.set($any(opt.value))"
-                      class="text-blue-600 focus:ring-blue-500"
-                    />
-                    <span class="text-sm text-gray-700 dark:text-gray-200">{{ opt.label }}</span>
-                  </label>
+                    <span
+                      class="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0"
+                      [style.backgroundColor]="m.color + '20'"
+                      [style.color]="m.color"
+                    >
+                      <i [class]="m.icon + ' text-base'"></i>
+                    </span>
+                    <span class="flex-1 min-w-0">
+                      <span class="block text-sm font-medium text-gray-900 dark:text-white">{{ m.label }}</span>
+                      <span class="block text-[11px] text-gray-500 dark:text-gray-400">{{ m.hint }}</span>
+                    </span>
+                    @if (paymentMethod() === m.id) {
+                      <i class="fas fa-check-circle text-blue-500"></i>
+                    }
+                  </button>
                 }
               </div>
+              @if (paymentMethod() === 'cash') {
+                <p class="mt-2 text-xs text-amber-700 dark:text-amber-400 flex items-start gap-1.5">
+                  <i class="fas fa-info-circle mt-0.5"></i>
+                  <span>
+                    El pago en efectivo queda <b>pendiente de confirmación</b> por el equipo de
+                    Simplifica. Tu servicio se activará en cuanto se confirme el pago.
+                  </span>
+                </p>
+              }
             </div>
 
-            @if (contractRecurrence() !== 'none') {
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                    Día de generación
-                  </label>
-                  <input
-                    type="number"
-                    [ngModel]="contractRecurrenceDay()"
-                    (ngModelChange)="contractRecurrenceDay.set($event ? +$event : null)"
-                    name="contractRecurrenceDay"
-                    min="1"
-                    [max]="contractRecurrence() === 'monthly' ? 31 : contractRecurrence() === 'weekly' ? 7 : 366"
-                    placeholder="1-31"
-                    class="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 dark:text-gray-200"
-                  />
-                </div>
-                <div>
-                  <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                    Fin (opcional)
-                  </label>
-                  <input
-                    type="date"
-                    [ngModel]="contractRecurrenceEnd()"
-                    (ngModelChange)="contractRecurrenceEnd.set($event || null)"
-                    name="contractRecurrenceEnd"
-                    class="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 dark:text-gray-200"
-                  />
-                </div>
-              </div>
-            }
-
             @if (errorMessage()) {
-              <p class="text-sm text-red-600">{{ errorMessage() }}</p>
+              <p class="text-sm text-red-600 dark:text-red-400 flex items-start gap-1.5">
+                <i class="fas fa-exclamation-circle mt-0.5"></i>
+                <span>{{ errorMessage() }}</span>
+              </p>
             }
           </div>
 
-          <footer class="flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+          <footer class="flex-shrink-0 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 flex items-center gap-3">
             <button
+              type="button"
               (click)="closeContractModal()"
               class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100"
             >
               Cancelar
             </button>
             <button
+              type="button"
               (click)="confirmContract()"
-              [disabled]="contracting() === svc.id"
-              class="px-5 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
+              [disabled]="contracting() === svc.id || !paymentMethod()"
+              class="flex-1 px-5 py-2.5 text-sm font-semibold rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               @if (contracting() === svc.id) {
-                <span class="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full"></span>
+                <span class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
+                Procesando pago…
+              } @else {
+                <i class="fas fa-lock text-xs"></i>
+                Pagar {{ formatPrice(orderTotal()) }} {{ currencyFor(svc) }}
               }
-              Confirmar contratación
             </button>
           </footer>
         </div>
@@ -539,15 +568,43 @@ export class PortalServicesComponent implements OnInit {
   contracting = signal<string | null>(null);
   errorMessage = signal<string | null>(null);
 
-  // Contract modal state
+  // Contract / payment modal state
   contractModalOpen = signal<boolean>(false);
   contractModalService = signal<PortalService | null>(null);
   contractModalVariant = signal<PortalServiceVariant | null>(null);
   contractModalPricingPeriod = signal<'one-time' | 'monthly' | 'annually' | 'custom' | null>(null);
-  contractStartDate = signal<string>(new Date().toISOString().slice(0, 10));
-  contractRecurrence = signal<'none' | 'monthly' | 'weekly' | 'yearly'>('none');
-  contractRecurrenceDay = signal<number | null>(null);
-  contractRecurrenceEnd = signal<string | null>(null);
+  paymentMethod = signal<'stripe' | 'paypal' | 'cash' | 'redsys' | null>(null);
+
+  /** Today in YYYY-MM-DD — used as the start_date of every contract. */
+  today(): string {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  /** Total to charge for the current order, considering variant + period. */
+  orderTotal(): number {
+    const variant = this.contractModalVariant();
+    if (variant) {
+      const p = this.variantFirstPrice(variant);
+      if (p) return p.price;
+    }
+    const svc = this.contractModalService();
+    if (!svc) return 0;
+    return svc.display_price ?? svc.base_price ?? 0;
+  }
+
+  /** Payment methods available to the client (cash requires owner confirmation). */
+  paymentMethods: Array<{
+    id: 'stripe' | 'paypal' | 'cash' | 'redsys';
+    label: string;
+    hint: string;
+    icon: string;
+    color: string;
+  }> = [
+    { id: 'stripe',  label: 'Stripe',  hint: 'Pago con tarjeta · inmediato',    icon: 'fab fa-cc-stripe',   color: '#635bff' },
+    { id: 'paypal',  label: 'PayPal',  hint: 'Cuenta o tarjeta · inmediato',    icon: 'fab fa-cc-paypal',   color: '#003087' },
+    { id: 'redsys',  label: 'RedSys',  hint: 'Tarjeta · pasarela española',     icon: 'fas fa-credit-card', color: '#d52b1e' },
+    { id: 'cash',    label: 'Efectivo',hint: 'A convenir · confirmación manual', icon: 'fas fa-money-bill-wave', color: '#16a34a' },
+  ];
 
   // Variants cache: serviceId → { loading, list, error }
   variantsByService = signal<Record<string, { loading: boolean; list: PortalServiceVariant[]; error?: string }>>({});
@@ -618,10 +675,7 @@ export class PortalServicesComponent implements OnInit {
     this.contractModalService.set(s);
     this.contractModalVariant.set(variant ?? null);
     this.contractModalPricingPeriod.set(pricingPeriod ?? null);
-    this.contractStartDate.set(new Date().toISOString().slice(0, 10));
-    this.contractRecurrence.set('none');
-    this.contractRecurrenceDay.set(null);
-    this.contractRecurrenceEnd.set(null);
+    this.paymentMethod.set(null);
     this.errorMessage.set(null);
     this.contractModalOpen.set(true);
   }
@@ -631,24 +685,35 @@ export class PortalServicesComponent implements OnInit {
     this.contractModalService.set(null);
     this.contractModalVariant.set(null);
     this.contractModalPricingPeriod.set(null);
+    this.paymentMethod.set(null);
   }
 
   async confirmContract() {
     const s = this.contractModalService();
     if (!s) return;
+    const method = this.paymentMethod();
+    if (!method) return;
     this.contracting.set(s.id);
     this.errorMessage.set(null);
-    const rec = this.contractRecurrence();
+
+    // TODO: integrate real payment gateways. For now, the gateway call is
+    // simulated: a short delay to represent the redirect/auth, then we
+    // mark the contract as created in the DB. Cash goes through the same
+    // path but the contracted row keeps status='pending_confirmation' so
+    // the owner has to ack it on the CRM side.
+    await this.simulatePayment(method);
+
     const variant = this.contractModalVariant();
     const { data, error } = await this.portal.contractService({
       service_id: s.id,
       variant_id: variant?.id ?? null,
       pricing_period: this.contractModalPricingPeriod() ?? null,
-      start_date: this.contractStartDate(),
-      recurrence_type: rec === 'none' ? null : rec,
-      recurrence_day: rec === 'none' ? null : this.contractRecurrenceDay(),
-      recurrence_start: rec === 'none' ? null : this.contractStartDate(),
-      recurrence_end: rec === 'none' ? null : this.contractRecurrenceEnd(),
+      start_date: this.today(),
+      recurrence_type: null,
+      recurrence_day: null,
+      recurrence_start: null,
+      recurrence_end: null,
+      payment_method: method,
     });
     this.contracting.set(null);
     if (data) {
@@ -657,6 +722,14 @@ export class PortalServicesComponent implements OnInit {
     } else {
       this.errorMessage.set(error?.message || 'No se pudo contratar el servicio');
     }
+  }
+
+  /** Stand-in for a real Stripe/PayPal/RedSys SDK call. */
+  private simulatePayment(method: 'stripe' | 'paypal' | 'cash' | 'redsys'): Promise<void> {
+    // Cash is instant confirmation (just records the request). Online
+    // gateways would redirect here in a real integration.
+    const delay = method === 'cash' ? 250 : 900;
+    return new Promise((resolve) => setTimeout(resolve, delay));
   }
 
   getVariantsFor(s: PortalService): PortalServiceVariant[] {
@@ -744,16 +817,6 @@ export class PortalServicesComponent implements OnInit {
     }
   }
 
-  // Legacy direct-contract path kept as fallback in case allow_direct_contracting
-  // is true and we want a one-click contract without a modal.
-  async contractDirect(s: PortalService) {
-    if (!s.allow_direct_contracting) return;
-    this.openContractModal(s);
-    // Auto-confirm with no recurrence for the legacy one-click path
-    this.contractRecurrence.set('none');
-    await this.confirmContract();
-  }
-
   formatPrice(p?: number | null): string {
     if (p == null) return '—';
     return new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(p);
@@ -796,22 +859,6 @@ export class PortalServicesComponent implements OnInit {
 
   private isLikelyUuid(value: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-  }
-
-  recurrenceOptions: Array<{ value: 'none' | 'monthly' | 'weekly' | 'yearly'; label: string }> = [
-    { value: 'none', label: 'Puntual' },
-    { value: 'monthly', label: 'Mensual' },
-    { value: 'weekly', label: 'Semanal' },
-    { value: 'yearly', label: 'Anual' },
-  ];
-
-  recurrenceLabel(t: string): string {
-    switch (t) {
-      case 'monthly': return 'Mensual';
-      case 'weekly': return 'Semanal';
-      case 'yearly': return 'Anual';
-      default: return t;
-    }
   }
 
   statusLabel(s: string): string {
