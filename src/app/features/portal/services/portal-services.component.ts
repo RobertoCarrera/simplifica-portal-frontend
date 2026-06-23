@@ -115,104 +115,70 @@ import {
                     }
 
                     @if (s.has_variants) {
-                      <details class="mb-3 group" (toggle)="loadVariants(s)">
-                        <summary class="cursor-pointer text-xs text-blue-600 dark:text-blue-400 hover:underline select-none flex items-center gap-1">
-                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                          </svg>
-                          Ver opciones disponibles
-                        </summary>
-                        <div class="mt-2 space-y-2">
-                          @if (variantsLoading(s)) {
-                            <div class="text-xs text-gray-400 py-2">Cargando opciones…</div>
-                          } @else if (getVariantsFor(s).length === 0) {
-                            <div class="text-xs text-gray-400 py-2">No hay opciones disponibles.</div>
-                          } @else {
+                      <div class="mt-2 mb-3">
+                        <div class="text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400 font-semibold mb-1.5">
+                          Elige una opción
+                        </div>
+                        @if (variantsLoading(s)) {
+                          <div class="text-xs text-gray-400 py-2">Cargando opciones…</div>
+                        } @else if (getVariantsFor(s).length === 0) {
+                          <div class="text-xs text-gray-400 py-2">No hay opciones disponibles.</div>
+                        } @else {
+                          <div class="grid grid-cols-2 gap-1.5">
                             @for (v of getVariantsFor(s); track v.id) {
-                              <div
-                                class="p-2.5 border rounded-md transition-colors"
-                                [class.border-blue-400]="v.display_config?.highlight"
-                                [class.bg-blue-50]="v.display_config?.highlight"
-                                [class.dark:bg-blue-900]="v.display_config?.highlight && v.display_config?.highlight"
-                                [class.border-gray-200]="!v.display_config?.highlight"
-                                [class.dark:border-gray-700]="!v.display_config?.highlight"
+                              <button
+                                type="button"
+                                (click)="selectVariant(s, v)"
+                                [class.border-blue-500]="selectedVariantId(s) === v.id"
+                                [class.bg-blue-50]="selectedVariantId(s) === v.id"
+                                [class.dark:bg-blue-900]="selectedVariantId(s) === v.id"
+                                [class.dark:border-blue-400]="selectedVariantId(s) === v.id"
+                                [class.border-gray-200]="selectedVariantId(s) !== v.id"
+                                [class.dark:border-gray-700]="selectedVariantId(s) !== v.id"
+                                class="text-left p-2.5 border rounded-md transition-colors hover:border-blue-400"
                               >
-                                <div class="flex items-start justify-between gap-2">
-                                  <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-1.5 flex-wrap">
-                                      <span class="text-sm font-medium text-gray-900 dark:text-white">{{ v.variant_name }}</span>
-                                      @if (v.display_config?.badge) {
-                                        <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 font-medium">
-                                          {{ v.display_config?.badge }}
-                                        </span>
-                                      }
-                                    </div>
-                                    @if (v.features?.included && v.features!.included!.length > 0) {
-                                      <ul class="mt-1 text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
-                                        @for (feat of v.features!.included!.slice(0, 3); track feat) {
-                                          <li class="flex items-start gap-1">
-                                            <span class="text-emerald-500">✓</span>
-                                            <span class="line-clamp-1">{{ feat }}</span>
-                                          </li>
-                                        }
-                                      </ul>
-                                    }
-                                  </div>
-                                  <div class="text-right flex-shrink-0">
-                                    @if (v.pricing && v.pricing.length > 0) {
-                                      @for (p of v.pricing; track p.period) {
-                                        <div class="text-xs">
-                                          <div class="font-semibold text-gray-900 dark:text-white">
-                                            {{ formatPrice(p.price) }} EUR
-                                          </div>
-                                          <div class="text-[10px] text-gray-500">{{ variantPeriodLabel(p.period) }}</div>
-                                        </div>
-                                      }
-                                    } @else {
-                                      <div class="text-xs">
-                                        <div class="font-semibold text-gray-900 dark:text-white">
-                                          —
-                                        </div>
-                                        <div class="text-[10px] text-gray-500">Consultar precio</div>
-                                      </div>
-                                    }
-                                  </div>
+                                <div class="flex items-baseline justify-between gap-1">
+                                  <span class="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                    {{ v.variant_name }}
+                                  </span>
+                                  @if (variantFirstPrice(v); as p) {
+                                    <span class="text-sm font-semibold text-gray-900 dark:text-white flex-shrink-0">
+                                      {{ formatPrice(p.price) }} €
+                                    </span>
+                                  }
                                 </div>
-                                @if (s.allow_direct_contracting) {
-                                  <div class="mt-2 flex flex-wrap gap-1">
-                                    @if (v.pricing && v.pricing.length > 1) {
-                                      @for (p of v.pricing; track p.period) {
-                                        <button
-                                          (click)="openContractModal(s, v, p.period)"
-                                          [disabled]="contracting() === s.id"
-                                          class="text-[10px] px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-                                        >
-                                          Contratar ({{ variantPeriodLabel(p.period) }})
-                                        </button>
-                                      }
-                                    } @else {
-                                      <button
-                                        (click)="openContractModal(s, v, firstPricingPeriod(v))"
-                                        [disabled]="contracting() === s.id"
-                                        class="text-[10px] px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-                                      >
-                                        Contratar esta opción
-                                      </button>
-                                    }
+                                @if (variantFirstPrice(v); as p) {
+                                  <div class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                    {{ variantPeriodLabel(p.period) }}
                                   </div>
                                 }
-                              </div>
+                                @if (v.display_config?.badge) {
+                                  <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 font-medium mt-1 inline-block">
+                                    {{ v.display_config?.badge }}
+                                  </span>
+                                }
+                              </button>
                             }
+                          </div>
+                          @if (selectedVariantId(s)) {
+                            <div class="mt-2 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                              <i class="fas fa-check-circle"></i>
+                              {{ selectedVariantName(s) }} seleccionado — usa los botones de abajo
+                            </div>
                           }
-                        </div>
-                      </details>
+                        }
+                      </div>
                     }
 
                     <div class="mt-auto pt-3 flex items-center gap-2 border-t border-gray-100 dark:border-gray-700">
-                      @if (s.allow_direct_contracting && s.is_bookable) {
+                      @if (s.has_variants && !selectedVariantId(s)) {
+                        <div class="w-full text-center text-xs text-gray-500 dark:text-gray-400 italic py-2">
+                          Selecciona una opción arriba para continuar
+                        </div>
+                      } @else if (s.allow_direct_contracting && s.is_bookable) {
                         <div class="flex gap-2 w-full">
                           <button
-                            (click)="openContractModal(s)"
+                            (click)="openContractModal(s, selectedVariant(s))"
                             [disabled]="contracting() === s.id"
                             class="flex-1 px-3 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
                           >
@@ -233,7 +199,7 @@ import {
                         </div>
                       } @else if (s.allow_direct_contracting) {
                         <button
-                          (click)="openContractModal(s)"
+                          (click)="openContractModal(s, selectedVariant(s))"
                           [disabled]="contracting() === s.id"
                           class="flex-1 px-3 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
                         >
@@ -479,6 +445,9 @@ export class PortalServicesComponent implements OnInit {
   // Category lookup: categoryId → { name, color, icon }
   categoriesById = signal<Record<string, { name: string | null; color: string | null; icon: string | null }>>({});
 
+  // Selected variant per service: serviceId → variantId
+  selectedVariantByService = signal<Record<string, string>>({});
+
   async ngOnInit() {
     this.loading.set(true);
     const { data, error } = await this.portal.listServices();
@@ -490,6 +459,13 @@ export class PortalServicesComponent implements OnInit {
         map[c.id] = { name: c.name, color: c.color, icon: c.icon };
       }
       this.categoriesById.set(map);
+
+      // Eager-load variants for any service that has them, so the user
+      // sees the options immediately without having to click to expand.
+      const withVariants = (data.available ?? []).filter((s) => s.has_variants);
+      for (const s of withVariants) {
+        this.loadVariants(s);
+      }
     }
     if (error) this.errorMessage.set(error.message);
     this.loading.set(false);
@@ -573,11 +549,47 @@ export class PortalServicesComponent implements OnInit {
     return null;
   }
 
+  /** First pricing entry of a variant (used for the variant button display). */
+  variantFirstPrice(v: PortalServiceVariant): { price: number; period: string } | null {
+    if (Array.isArray(v.pricing) && v.pricing.length > 0) {
+      const p = v.pricing[0];
+      if (typeof p?.price === 'number' && p.period) {
+        return { price: p.price, period: p.period };
+      }
+    }
+    return null;
+  }
+
   firstPricingPeriod(v: PortalServiceVariant): 'one-time' | 'monthly' | 'annually' | 'custom' | undefined {
     if (Array.isArray(v.pricing) && v.pricing.length > 0 && v.pricing[0]?.period) {
       return v.pricing[0].period as 'one-time' | 'monthly' | 'annually' | 'custom';
     }
     return undefined;
+  }
+
+  /** Mark a variant as selected for a service. */
+  selectVariant(s: PortalService, v: PortalServiceVariant) {
+    this.selectedVariantByService.set({
+      ...this.selectedVariantByService(),
+      [s.id]: v.id,
+    });
+  }
+
+  selectedVariantId(s: PortalService): string | null {
+    return this.selectedVariantByService()[s.id] ?? null;
+  }
+
+  selectedVariantName(s: PortalService): string | null {
+    const id = this.selectedVariantId(s);
+    if (!id) return null;
+    return this.getVariantsFor(s).find((v) => v.id === id)?.variant_name ?? null;
+  }
+
+  /** Returns the currently-selected variant for a service, or undefined. */
+  selectedVariant(s: PortalService): PortalServiceVariant | undefined {
+    const id = this.selectedVariantId(s);
+    if (!id) return undefined;
+    return this.getVariantsFor(s).find((v) => v.id === id);
   }
 
   variantPeriodLabel(p: string): string {
