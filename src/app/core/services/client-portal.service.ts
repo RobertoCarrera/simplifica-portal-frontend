@@ -175,7 +175,6 @@ export interface PortalServiceVariant {
   id: string;
   service_id: string;
   variant_name: string;
-  base_price?: number | null;
   pricing?: PortalServiceVariantPricing[] | null;
   features?: {
     included?: string[];

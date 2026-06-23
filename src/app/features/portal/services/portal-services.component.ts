@@ -168,11 +168,12 @@ import {
                                           <div class="text-[10px] text-gray-500">{{ variantPeriodLabel(p.period) }}</div>
                                         </div>
                                       }
-                                    } @else if (v.base_price != null) {
+                                    } @else {
                                       <div class="text-xs">
                                         <div class="font-semibold text-gray-900 dark:text-white">
-                                          {{ formatPrice(v.base_price) }} EUR
+                                          —
                                         </div>
+                                        <div class="text-[10px] text-gray-500">Consultar precio</div>
                                       </div>
                                     }
                                   </div>
@@ -569,7 +570,6 @@ export class PortalServicesComponent implements OnInit {
       if (match && typeof match.price !== 'undefined') return match.price;
       if (v.pricing[0] && typeof v.pricing[0].price !== 'undefined') return v.pricing[0].price;
     }
-    if (typeof v.base_price === 'number') return v.base_price;
     return null;
   }
 
