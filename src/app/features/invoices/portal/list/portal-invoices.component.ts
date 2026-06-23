@@ -162,8 +162,6 @@ interface PaymentInfo {
       </div>
     </div>
 
-    <!-- Payment Method Selector - STUB: needs cross-feature dependency -->
-    <!-- app-payment-method-selector removed - Phase 3 will handle -->
   `,
 })
 export class PortalInvoicesComponent {
@@ -185,8 +183,7 @@ export class PortalInvoicesComponent {
 
   async downloadPdf(id: string) {
     try {
-      // STUB: InvoicesService stub needed - Phase 3
-      this.toastService.error("Error", "Descarga PDF no disponible en Phase 2");
+      this.toastService.error("Error", "Descarga PDF no disponible por el momento");
     } catch (e: any) {
       this.toastService.error(
         "Error",

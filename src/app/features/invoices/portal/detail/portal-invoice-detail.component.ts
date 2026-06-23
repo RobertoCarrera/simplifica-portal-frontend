@@ -239,8 +239,7 @@ export class PortalInvoiceDetailComponent implements OnInit {
   }
 
   downloadPdf() {
-    // STUB: Phase 3 - InvoicesService needed
-    this.toast.error("Error", "Descarga PDF no disponible en Phase 2");
+    this.toast.error("Descarga no disponible", "Contactanos para obtener el PDF de esta factura.");
   }
 
   displayInvoiceNumber(inv: any): string {

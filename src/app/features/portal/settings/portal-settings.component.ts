@@ -1,15 +1,11 @@
-import { Component, OnInit, inject, signal } from "@angular/core";
+import { Component, OnInit, inject } from "@angular/core";
 import { CommonModule } from "@angular/common";
-import { FormsModule } from "@angular/forms";
 import { PortalAuthService } from "../../../core/services/portal-auth.service";
-import { ToastService } from "../../../shared/services/toast.service"; // STUB
-
-// STUB: Phase 3 - needs customers service and ClientGdprPanelComponent
 
 @Component({
   selector: "app-portal-settings",
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule],
   template: `
     <div class="max-w-4xl mx-auto p-6 space-y-8">
       <div class="flex items-center justify-between">
@@ -25,45 +21,48 @@ import { ToastService } from "../../../shared/services/toast.service"; // STUB
         </div>
       }
 
-      <!-- STUB: Phase 3 - Billing section will be completed when supabase-customers.service is stubbed -->
-      <div
+      <!-- Datos de Facturación -->
+      <section
         class="bg-white dark:bg-gray-800 shadow rounded-xl p-6 border border-gray-200 dark:border-gray-700"
       >
         <h2
-          class="text-xl font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2"
+          class="text-xl font-bold text-gray-800 dark:text-white mb-2 flex items-center gap-2"
         >
           <i class="fas fa-file-invoice-dollar text-primary-500"></i>
           Datos de Facturación
         </h2>
-        <p class="text-gray-500 dark:text-gray-400 mb-6 text-sm">
-          Configura tus datos de facturación — Phase 3 integration needed
+        <p class="text-gray-500 dark:text-gray-400 text-sm mb-4">
+          Estos datos se usan al emitir facturas a tu nombre. Si necesitás
+          cambiarlos, contactanos y los actualizamos en tu ficha de cliente.
         </p>
-        <div class="text-gray-400 dark:text-gray-500">
-          billing_email, iban, bic, payment_method fields — STUB
-        </div>
-      </div>
+        <ul class="text-sm text-gray-700 dark:text-gray-300 space-y-1">
+          <li><span class="text-gray-500">Email de facturación:</span> {{ user?.email ?? '—' }}</li>
+          <li><span class="text-gray-500">Empresa:</span> {{ user?.company_name ?? '—' }}</li>
+          <li><span class="text-gray-500">NIF/CIF:</span> {{ user?.tax_id ?? '—' }}</li>
+        </ul>
+      </section>
 
-      <!-- STUB: Phase 3 - GDPR Panel will use copied client-gdpr-panel component -->
-      <div
+      <!-- GDPR -->
+      <section
         class="bg-white dark:bg-gray-800 shadow rounded-xl p-6 border border-gray-200 dark:border-gray-700"
       >
         <h2
-          class="text-xl font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2"
+          class="text-xl font-bold text-gray-800 dark:text-white mb-2 flex items-center gap-2"
         >
           <i class="fas fa-shield-alt text-primary-500"></i>
           Consentimientos GDPR
         </h2>
         <p class="text-gray-500 dark:text-gray-400 text-sm">
-          Phase 3: Integrate ClientGdprPanelComponent from copied customers
-          feature
+          Podés revisar y modificar tus consentimientos de privacidad y
+          comunicaciones comerciales desde la sección
+          <a routerLink="/portal/consent" class="text-primary-600 dark:text-primary-400 hover:underline">Consentimientos</a>.
         </p>
-      </div>
+      </section>
     </div>
   `,
 })
 export class PortalSettingsComponent implements OnInit {
   private auth = inject(PortalAuthService);
-  private toast = inject(ToastService); // STUB
 
   user: any = null;
   isLoading = true;

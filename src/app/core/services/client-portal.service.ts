@@ -250,7 +250,7 @@ export class ClientPortalService {
     try {
       const token = await this.requireAccessToken();
       const anonKey = this.auth.supabaseKey;
-      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-bff/tickets';
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/tickets';
 
       const res = await fetch(bffUrl, {
         method: 'GET',
@@ -279,7 +279,7 @@ export class ClientPortalService {
     try {
       const token = await this.requireAccessToken();
       const anonKey = this.auth.supabaseKey;
-      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-bff/quotes';
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/quotes';
 
       const res = await fetch(bffUrl, {
         method: 'GET',
@@ -308,7 +308,7 @@ export class ClientPortalService {
     try {
       const token = await this.requireAccessToken();
       const anonKey = this.auth.supabaseKey;
-      const bffUrl = this.auth.supabaseUrl + `/functions/v1/client-portal-bff/quotes/${id}`;
+      const bffUrl = this.auth.supabaseUrl + `/functions/v1/client-portal-modules/quotes/${id}`;
 
       const res = await fetch(bffUrl, {
         method: 'GET',
@@ -338,7 +338,7 @@ export class ClientPortalService {
     try {
       const token = await this.requireAccessToken();
       const anonKey = this.auth.supabaseKey;
-      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-bff/invoices';
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/invoices';
 
       const res = await fetch(bffUrl, {
         method: 'GET',
@@ -367,7 +367,7 @@ export class ClientPortalService {
     try {
       const token = await this.requireAccessToken();
       const anonKey = this.auth.supabaseKey;
-      const bffUrl = this.auth.supabaseUrl + `/functions/v1/client-portal-bff/invoices/${id}`;
+      const bffUrl = this.auth.supabaseUrl + `/functions/v1/client-portal-modules/invoices/${id}`;
 
       const res = await fetch(bffUrl, {
         method: 'GET',
@@ -814,15 +814,11 @@ export class ClientPortalService {
 
       if (!res.ok) throw new Error(`services endpoint returned ${res.status}`);
       const json = await res.json();
-      // DEBUG: expose raw body to UI for diagnosis
-      (globalThis as any).__lastServicesResponse = json;
       return {
         data: {
           available: json?.available ?? [],
           contracted: json?.contracted ?? [],
-          // Pass through _debug if the BFF sent it
-          _debug: json?._debug,
-        } as any,
+        },
       };
     } catch (e: any) {
       console.error('[ClientPortalService] listServices failed:', e?.message);

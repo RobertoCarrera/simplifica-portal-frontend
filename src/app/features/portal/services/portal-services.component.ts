@@ -39,31 +39,6 @@ import {
         @if (loading()) {
           <div class="p-8 text-center text-gray-500">Cargando servicios…</div>
         } @else {
-          <!-- DEBUG BANNER (quitar cuando se arregle) -->
-          @if (debugShowRaw() && debugRawResponse()) {
-            <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg px-3 py-2 text-xs font-mono text-amber-900 dark:text-amber-200 mb-4">
-              <div class="flex items-center justify-between">
-                <div>
-                  🔧 DEBUG · <b>available:</b> {{ debugRawResponse()?.availableCount ?? 0 }}
-                  · <b>contracted:</b> {{ debugRawResponse()?.contractedCount ?? 0 }}
-                  · <b>BFF ctx.companyId:</b> {{ debugRawResponse()?.ctx_companyId || '?' }}
-                  · <b>BFF ctx.clientId:</b> {{ debugRawResponse()?.ctx_clientId || '?' }}
-                  · <b>crm_url:</b> {{ debugRawResponse()?.crm_url || '?' }}
-                </div>
-                <button
-                  (click)="debugShowRaw.set(false)"
-                  class="text-amber-600 hover:text-amber-800"
-                  title="Ocultar"
-                >✕</button>
-              </div>
-              @if (debugRawResponse()?.rawAvailable) {
-                <details class="mt-1">
-                  <summary class="cursor-pointer">Ver raw available ({{ debugRawResponse()?.rawAvailable?.length }})</summary>
-                  <pre class="mt-1 text-[10px] whitespace-pre-wrap break-all">{{ debugRawResponse()?.rawAvailable | json }}</pre>
-                </details>
-              }
-            </div>
-          }
           <!-- AVAILABLE SERVICIOS -->
           <section>
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Servicios disponibles</h2>
@@ -241,7 +216,29 @@ import {
                     }
 
                     <div class="mt-auto pt-3 flex items-center justify-between gap-2 border-t border-gray-100 dark:border-gray-700">
-                      @if (s.allow_direct_contracting) {
+                      @if (s.allow_direct_contracting && s.is_bookable) {
+                        <div class="flex flex-col gap-1.5 w-full">
+                          <button
+                            (click)="openContractModal(s)"
+                            [disabled]="contracting() === s.id"
+                            class="w-full px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                          >
+                            @if (contracting() === s.id) {
+                              <span class="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full"></span>
+                            }
+                            Contratar
+                          </button>
+                          <button
+                            type="button"
+                            disabled
+                            class="w-full px-4 py-2 text-sm font-medium rounded-md bg-emerald-600 text-white opacity-70 cursor-not-allowed flex items-center justify-center gap-1.5"
+                            title="Reservar (Próximamente)"
+                          >
+                            <i class="fas fa-calendar-plus"></i>
+                            Reservar
+                          </button>
+                        </div>
+                      } @else if (s.allow_direct_contracting) {
                         <button
                           (click)="openContractModal(s)"
                           [disabled]="contracting() === s.id"
@@ -252,8 +249,18 @@ import {
                           }
                           Contratar
                         </button>
+                      } @else if (s.is_bookable) {
+                        <button
+                          type="button"
+                          disabled
+                          class="px-4 py-2 text-sm font-medium rounded-md bg-emerald-600 text-white opacity-70 cursor-not-allowed flex items-center gap-1.5"
+                          title="Reservar (Próximamente)"
+                        >
+                          <i class="fas fa-calendar-plus"></i>
+                          Reservar
+                        </button>
                       } @else {
-                        <span class="text-xs text-gray-400">Sólo visible en el portal</span>
+                        <span class="text-xs text-gray-400">Consultanos si te interesa</span>
                       }
                       @if (s.booking_color) {
                         <span
@@ -469,11 +476,6 @@ export class PortalServicesComponent implements OnInit {
   contracted = signal<PortalContractedService[]>([]);
   contracting = signal<string | null>(null);
   errorMessage = signal<string | null>(null);
-  // DEBUG: raw BFF response to inspect in the UI
-  debugRawResponse = signal<any>(null);
-  debugShowRaw = signal<boolean>(true);
-  debugCompanyId = signal<string>('');
-  debugClientId = signal<string>('');
 
   // Contract modal state
   contractModalOpen = signal<boolean>(false);
@@ -490,24 +492,10 @@ export class PortalServicesComponent implements OnInit {
 
   async ngOnInit() {
     this.loading.set(true);
-    // DEBUG: capture company/client IDs from auth service for the banner
-    const auth = (this.portal as any).auth;
-    this.debugCompanyId.set(auth?.supabaseUrl || 'unknown');
-    this.debugClientId.set((globalThis as any).__lastServicesResponse ? 'fetched' : 'pending');
     const { data, error } = await this.portal.listServices();
     if (data) {
       this.available.set(data.available ?? []);
       this.contracted.set(data.contracted ?? []);
-      this.debugRawResponse.set({
-        availableCount: data.available?.length ?? 0,
-        contractedCount: data.contracted?.length ?? 0,
-        availableFirst: data.available?.[0] ?? null,
-        rawAvailable: data.available,
-        ctx_companyId: (data as any)._debug?.ctx_companyId,
-        ctx_clientId: (data as any)._debug?.ctx_clientId,
-        crm_url: (data as any)._debug?.crm_url,
-        first_available: (data as any)._debug?.first_available,
-      });
     }
     if (error) this.errorMessage.set(error.message);
     this.loading.set(false);
