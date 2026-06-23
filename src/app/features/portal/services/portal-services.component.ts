@@ -264,6 +264,7 @@ import {
                 }
               </div>
             }
+            </div>
           </section>
 
           <!-- CONTRACTED SERVICES PANE -->
