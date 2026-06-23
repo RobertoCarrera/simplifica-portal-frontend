@@ -291,7 +291,7 @@ import {
     <!-- CONTRACTED SERVICES BOTTOM SHEET (mobile-first, slides up from bottom) -->
     @if (contractedSheetOpen()) {
       <div
-        class="fixed inset-0 z-40"
+        class="fixed inset-0 z-[1200]"
         (click)="contractedSheetOpen.set(false)"
       >
         <div class="absolute inset-0 bg-black/50"></div>
