@@ -70,18 +70,20 @@ import {
                       }
                     </header>
 
-                    <div class="mb-3 flex items-baseline gap-1">
-                      @if (s.display_price != null || s.base_price != null) {
-                        <span class="text-2xl font-bold text-gray-900 dark:text-white">
-                          {{ formatPrice(s.display_price ?? s.base_price) }} {{ currencyFor(s) }}
-                        </span>
-                        @if (s.display_price_label) {
-                          <span class="text-xs text-gray-500 ml-1">{{ s.display_price_label }}</span>
+                    @if (!s.has_variants) {
+                      <div class="mb-3 flex items-baseline gap-1">
+                        @if (s.display_price != null || s.base_price != null) {
+                          <span class="text-2xl font-bold text-gray-900 dark:text-white">
+                            {{ formatPrice(s.display_price ?? s.base_price) }} {{ currencyFor(s) }}
+                          </span>
+                          @if (s.display_price_label) {
+                            <span class="text-xs text-gray-500 ml-1">{{ s.display_price_label }}</span>
+                          }
+                        } @else {
+                          <span class="text-sm text-gray-400 italic">Consultar precio</span>
                         }
-                      } @else {
-                        <span class="text-sm text-gray-400 italic">Consultar precio</span>
-                      }
-                    </div>
+                      </div>
+                    }
 
                     @if (s.duration_minutes || s.estimated_hours) {
                       <div class="mb-3 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
@@ -115,16 +117,36 @@ import {
                     }
 
                     @if (s.has_variants) {
-                      <div class="mt-2 mb-3">
-                        <div class="text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400 font-semibold mb-1.5">
-                          Elige una opción
-                        </div>
-                        @if (variantsLoading(s)) {
-                          <div class="text-xs text-gray-400 py-2">Cargando opciones…</div>
-                        } @else if (getVariantsFor(s).length === 0) {
-                          <div class="text-xs text-gray-400 py-2">No hay opciones disponibles.</div>
-                        } @else {
-                          <div class="grid grid-cols-2 gap-1.5">
+                      <details
+                        class="mt-2 mb-3 group"
+                        [attr.open]="selectedVariantId(s) ? '' : null"
+                      >
+                        <summary
+                          class="cursor-pointer text-xs font-medium select-none flex items-center justify-between gap-1 px-2.5 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 hover:border-blue-400 transition-colors"
+                          [class.text-blue-600]="selectedVariantId(s)"
+                          [class.dark:text-blue-400]="selectedVariantId(s)"
+                          [class.border-blue-300]="selectedVariantId(s)"
+                        >
+                          <span class="flex items-center gap-1.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                            </svg>
+                            @if (selectedVariantId(s)) {
+                              Opción: <strong class="font-semibold">{{ selectedVariantName(s) }}</strong>
+                            } @else {
+                              Elegir opción
+                            }
+                          </span>
+                          @if (selectedVariantId(s)) {
+                            <i class="fas fa-check-circle text-blue-500"></i>
+                          }
+                        </summary>
+                        <div class="mt-2 grid grid-cols-2 gap-1.5">
+                          @if (variantsLoading(s)) {
+                            <div class="col-span-2 text-xs text-gray-400 py-2">Cargando opciones…</div>
+                          } @else if (getVariantsFor(s).length === 0) {
+                            <div class="col-span-2 text-xs text-gray-400 py-2">No hay opciones disponibles.</div>
+                          } @else {
                             @for (v of getVariantsFor(s); track v.id) {
                               <button
                                 type="button"
@@ -159,15 +181,9 @@ import {
                                 }
                               </button>
                             }
-                          </div>
-                          @if (selectedVariantId(s)) {
-                            <div class="mt-2 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                              <i class="fas fa-check-circle"></i>
-                              {{ selectedVariantName(s) }} seleccionado — usa los botones de abajo
-                            </div>
                           }
-                        }
-                      </div>
+                        </div>
+                      </details>
                     }
 
                     <div class="mt-auto pt-3 flex items-center gap-2 border-t border-gray-100 dark:border-gray-700">
