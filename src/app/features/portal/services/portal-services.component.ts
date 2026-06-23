@@ -35,19 +35,25 @@ import {
         </div>
       </div>
 
-      <div class="flex-1 min-h-0 p-3 flex flex-col gap-3">
+      <div class="flex-1 min-h-0 p-3 flex flex-col gap-3 relative">
         @if (loading()) {
           <div class="p-8 text-center text-gray-500">Cargando servicios…</div>
         } @else {
           <!-- AVAILABLE SERVICIOS PANE -->
           <section class="flex-1 min-h-0 flex flex-col bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-            <div class="flex-shrink-0 p-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3 flex-wrap">
-              <h2 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                Servicios disponibles
-                <span class="px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-medium">
-                  {{ filteredAvailable().length }} / {{ available().length }}
-                </span>
-              </h2>
+            <div class="flex-shrink-0 p-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2 flex-wrap">
+              <span class="px-3 py-1 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-xs font-medium">
+                {{ filteredAvailable().length }} / {{ available().length }} disponibles
+              </span>
+              @if (availableSearch()) {
+                <button
+                  type="button"
+                  (click)="availableSearch.set('')"
+                  class="text-[10px] text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 underline"
+                >
+                  Limpiar filtro
+                </button>
+              }
               <div class="ml-auto relative">
                 <input
                   type="search"
@@ -265,93 +271,129 @@ import {
               </div>
             }
             </div>
-          </section>
-
-          <!-- CONTRACTED SERVICES PANE -->
-          <section class="flex-1 min-h-0 flex flex-col bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-            <div class="flex-shrink-0 p-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3 flex-wrap">
-              <h2 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                Mis servicios contratados
-                <span class="px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 font-medium">
-                  {{ filteredContracted().length }} / {{ contracted().length }}
+            <!-- Sticky bottom trigger for the contracted-services sheet -->
+            <div class="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 p-2 flex justify-center bg-gray-50 dark:bg-gray-900/30">
+              <button
+                type="button"
+                (click)="contractedSheetOpen.set(true)"
+                class="w-full md:w-auto px-4 py-2 text-sm font-medium rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 flex items-center justify-center gap-2 transition-colors"
+              >
+                <i class="fas fa-briefcase"></i>
+                Ver mis servicios contratados
+                <span class="px-2 py-0.5 text-xs rounded-full bg-emerald-600 text-white font-semibold">
+                  {{ contracted().length }}
                 </span>
-              </h2>
-              <div class="ml-auto relative">
-                <input
-                  type="search"
-                  [ngModel]="contractedSearch()"
-                  (ngModelChange)="contractedSearch.set($event)"
-                  placeholder="Filtrar…"
-                  class="pl-8 pr-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg w-64 focus:ring-2 focus:ring-emerald-500 outline-none text-gray-700 dark:text-gray-200"
-                />
-                <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-              </div>
-            </div>
-            <div class="flex-1 min-h-0 overflow-y-auto">
-              @if (contracted().length === 0) {
-                <div class="p-8 text-center text-gray-500">
-                  Aún no tienes servicios contratados. Contrata uno desde la sección superior.
-                </div>
-              } @else if (filteredContracted().length === 0) {
-                <div class="p-8 text-center text-gray-500">
-                  Ningún servicio coincide con «<b>{{ contractedSearch() }}</b>».
-                </div>
-              } @else {
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead class="bg-gray-50 dark:bg-gray-900/50 sticky top-0">
-                    <tr>
-                      <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Servicio</th>
-                      <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Inicio</th>
-                      <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Recurrencia</th>
-                      <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
-                      <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Precio</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                    @for (c of filteredContracted(); track c.id) {
-                      <tr>
-                        <td class="px-4 py-3 text-sm">
-                          <div class="font-medium text-gray-900 dark:text-white">{{ c.name }}</div>
-                          @if (c.description) {
-                            <div class="text-xs text-gray-500 line-clamp-1">{{ c.description }}</div>
-                          }
-                        </td>
-                        <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-                          {{ c.start_date | date: 'mediumDate' }}
-                        </td>
-                        <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-                          @if (c.recurrence_type) {
-                            <div class="flex flex-col text-xs">
-                              <span class="font-medium">{{ recurrenceLabel(c.recurrence_type) }}</span>
-                              @if (c.recurrence_day) {
-                                <span class="text-gray-500">día {{ c.recurrence_day }}</span>
-                              }
-                              @if (c.recurrence_start && c.recurrence_start !== c.start_date) {
-                                <span class="text-gray-500">desde {{ c.recurrence_start | date: 'mediumDate' }}</span>
-                              }
-                            </div>
-                          } @else {
-                            <span class="text-gray-400">Puntual</span>
-                          }
-                        </td>
-                        <td class="px-4 py-3 text-sm">
-                          <span [class]="statusClass(c.status)">
-                            {{ statusLabel(c.status) }}
-                          </span>
-                        </td>
-                        <td class="px-4 py-3 text-sm text-right font-medium text-gray-900 dark:text-white">
-                          {{ formatPrice(c.price) }} {{ c.currency }}
-                        </td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
-              }
+              </button>
             </div>
           </section>
         }
       </div>
     </div>
+
+    <!-- CONTRACTED SERVICES BOTTOM SHEET (overlay) -->
+    @if (contractedSheetOpen()) {
+      <div
+        class="fixed inset-0 bg-black/50 z-40 flex items-end justify-center"
+        (click)="contractedSheetOpen.set(false)"
+      >
+        <div
+          class="bg-white dark:bg-gray-800 w-full max-w-4xl max-h-[80vh] rounded-t-2xl shadow-2xl flex flex-col"
+          (click)="$event.stopPropagation()"
+        >
+          <div class="flex-shrink-0 p-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2 flex-wrap">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              Mis servicios contratados
+              <span class="px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 font-medium">
+                {{ filteredContracted().length }} / {{ contracted().length }}
+              </span>
+            </h3>
+            <div class="ml-auto relative flex items-center gap-2">
+              <div class="relative">
+                <input
+                  type="search"
+                  [ngModel]="contractedSearch()"
+                  (ngModelChange)="contractedSearch.set($event)"
+                  placeholder="Filtrar…"
+                  class="pl-8 pr-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg w-56 focus:ring-2 focus:ring-emerald-500 outline-none text-gray-700 dark:text-gray-200"
+                />
+                <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+              </div>
+              <button
+                type="button"
+                (click)="contractedSheetOpen.set(false)"
+                class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5"
+                title="Cerrar"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="flex-1 min-h-0 overflow-y-auto">
+            @if (contracted().length === 0) {
+              <div class="p-8 text-center text-gray-500">
+                Aún no tienes servicios contratados. Contrata uno desde la sección superior.
+              </div>
+            } @else if (filteredContracted().length === 0) {
+              <div class="p-8 text-center text-gray-500">
+                Ningún servicio coincide con «<b>{{ contractedSearch() }}</b>».
+              </div>
+            } @else {
+              <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-900/50 sticky top-0">
+                  <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Servicio</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Inicio</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Recurrencia</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
+                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Precio</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                  @for (c of filteredContracted(); track c.id) {
+                    <tr>
+                      <td class="px-4 py-3 text-sm">
+                        <div class="font-medium text-gray-900 dark:text-white">{{ c.name }}</div>
+                        @if (c.description) {
+                          <div class="text-xs text-gray-500 line-clamp-1">{{ c.description }}</div>
+                        }
+                      </td>
+                      <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                        {{ c.start_date | date: 'mediumDate' }}
+                      </td>
+                      <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                        @if (c.recurrence_type) {
+                          <div class="flex flex-col text-xs">
+                            <span class="font-medium">{{ recurrenceLabel(c.recurrence_type) }}</span>
+                            @if (c.recurrence_day) {
+                              <span class="text-gray-500">día {{ c.recurrence_day }}</span>
+                            }
+                            @if (c.recurrence_start && c.recurrence_start !== c.start_date) {
+                              <span class="text-gray-500">desde {{ c.recurrence_start | date: 'mediumDate' }}</span>
+                            }
+                          </div>
+                        } @else {
+                          <span class="text-gray-400">Puntual</span>
+                        }
+                      </td>
+                      <td class="px-4 py-3 text-sm">
+                        <span [class]="statusClass(c.status)">
+                          {{ statusLabel(c.status) }}
+                        </span>
+                      </td>
+                      <td class="px-4 py-3 text-sm text-right font-medium text-gray-900 dark:text-white">
+                        {{ formatPrice(c.price) }} {{ c.currency }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+        </div>
+      </div>
+    }
 
     <!-- CONTRACT MODAL -->
     @if (contractModalOpen() && contractModalService(); as svc) {
@@ -511,6 +553,9 @@ export class PortalServicesComponent implements OnInit {
   // Filter inputs (toolbar search)
   availableSearch = signal<string>('');
   contractedSearch = signal<string>('');
+
+  // Bottom-sheet toggle for the contracted-services panel
+  contractedSheetOpen = signal<boolean>(false);
 
   // Filtered lists (computed from raw + search)
   filteredAvailable = computed(() => {
