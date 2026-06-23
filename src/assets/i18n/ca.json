@@ -44,5 +44,8 @@
     "analyticsDesc": "Ens ajuden a entendre com fas servir el lloc",
     "marketing": "Màrqueting",
     "marketingDesc": "Per mostrar-te anuncis rellevants"
+  },
+  "shared": {
+    "usuario": "Usuari"
   }
 }

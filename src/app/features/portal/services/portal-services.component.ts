@@ -112,9 +112,9 @@ import {
                       <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 italic line-clamp-2">{{ s.features }}</p>
                     }
 
-                    @if (s.tags && s.tags.length > 0) {
+                    @if (tagsFor(s) && tagsFor(s)!.length > 0) {
                       <div class="flex flex-wrap gap-1 mb-3">
-                        @for (tag of s.tags; track tag) {
+                        @for (tag of tagsFor(s)!; track tag) {
                           <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                             {{ tag }}
                           </span>
@@ -621,6 +621,10 @@ export class PortalServicesComponent implements OnInit {
     const h = Math.floor(min / 60);
     const m = min % 60;
     return m ? `${h} h ${m} min` : `${h} h`;
+  }
+
+  tagsFor(s: PortalService): string[] | null {
+    return Array.isArray((s as any).tags) && (s as any).tags.length > 0 ? (s as any).tags : null;
   }
 
   recurrenceOptions: Array<{ value: 'none' | 'monthly' | 'weekly' | 'yearly'; label: string }> = [

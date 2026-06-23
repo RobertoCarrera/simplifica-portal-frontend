@@ -44,5 +44,8 @@
     "analyticsDesc": "Nos ayudan a entender cómo usas el sitio",
     "marketing": "Marketing",
     "marketingDesc": "Para mostrarte anuncios relevantes"
+  },
+  "shared": {
+    "usuario": "Usuario"
   }
 }
