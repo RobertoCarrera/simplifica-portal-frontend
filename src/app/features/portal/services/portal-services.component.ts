@@ -296,7 +296,7 @@ import {
       >
         <div class="absolute inset-0 bg-black/50"></div>
         <div
-          class="absolute bottom-0 left-0 right-0 md:left-1/2 md:-translate-x-1/2 md:max-w-3xl md:w-full bg-white dark:bg-gray-800 rounded-t-2xl md:rounded-2xl md:mb-6 shadow-2xl flex flex-col overflow-hidden max-h-[85vh] animate-[slideUp_0.25s_ease-out]"
+          class="absolute bottom-0 left-0 right-0 mx-auto max-w-2xl bg-white dark:bg-gray-800 rounded-t-2xl shadow-2xl flex flex-col overflow-hidden max-h-[85vh] animate-[slideUp_0.25s_ease-out]"
           (click)="$event.stopPropagation()"
         >
           <!-- Drag handle for mobile visual cue -->
