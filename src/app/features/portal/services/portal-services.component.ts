@@ -51,62 +51,54 @@ import {
                 @for (s of available(); track s.id) {
                   <article class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 flex flex-col hover:shadow-md transition-shadow">
                     <header class="mb-3">
-                      <div class="flex items-start justify-between gap-2">
-                        <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ s.name }}</h3>
-                        @if (s.category) {
-                          <span class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex-shrink-0">
-                            {{ s.category }}
-                          </span>
-                        }
-                      </div>
+                      @if (categoryLabel(s); as catName) {
+                        <div
+                          class="text-[10px] uppercase tracking-wider font-semibold mb-1.5 flex items-center gap-1.5"
+                          [style.color]="categoryColor(s) || '#6b7280'"
+                        >
+                          @if (categoryIcon(s)) {
+                            <i [class]="categoryIcon(s)!"></i>
+                          }
+                          {{ catName }}
+                        </div>
+                      }
+                      <h3 class="text-base font-semibold text-gray-900 dark:text-white leading-snug">{{ s.name }}</h3>
                       @if (s.description) {
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-3">{{ s.description }}</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1.5 line-clamp-3" [innerHTML]="s.description"></p>
+                      } @else {
+                        <p class="text-sm text-gray-400 dark:text-gray-500 mt-1.5 italic">Sin descripción</p>
                       }
                     </header>
 
-                    <dl class="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-300 mb-3">
+                    <div class="mb-3 flex items-baseline gap-1">
                       @if (s.display_price != null || s.base_price != null) {
-                        <div>
-                          <dt class="text-gray-400">Precio</dt>
-                          <dd class="font-semibold text-gray-900 dark:text-white">
-                            {{ formatPrice(s.display_price ?? s.base_price) }} {{ currencyFor(s) }}
-                            @if (s.display_price_label) {
-                              <span class="text-xs font-normal text-gray-500 ml-1">{{ s.display_price_label }}</span>
-                            }
-                          </dd>
-                        </div>
+                        <span class="text-2xl font-bold text-gray-900 dark:text-white">
+                          {{ formatPrice(s.display_price ?? s.base_price) }} {{ currencyFor(s) }}
+                        </span>
+                        @if (s.display_price_label) {
+                          <span class="text-xs text-gray-500 ml-1">{{ s.display_price_label }}</span>
+                        }
+                      } @else {
+                        <span class="text-sm text-gray-400 italic">Consultar precio</span>
                       }
-                      @if (s.duration_minutes) {
-                        <div>
-                          <dt class="text-gray-400">Duración</dt>
-                          <dd class="font-semibold text-gray-900 dark:text-white">{{ formatDuration(s.duration_minutes) }}</dd>
-                        </div>
-                      }
-                      @if (s.estimated_hours) {
-                        <div>
-                          <dt class="text-gray-400">Horas estimadas</dt>
-                          <dd class="font-semibold text-gray-900 dark:text-white">{{ s.estimated_hours }} h</dd>
-                        </div>
-                      }
-                      @if (s.display_hourly_rate) {
-                        <div>
-                          <dt class="text-gray-400">Tarifa / h</dt>
-                          <dd class="font-semibold text-gray-900 dark:text-white">{{ formatPrice(s.display_hourly_rate) }} {{ currencyFor(s) }}</dd>
-                        </div>
-                      }
-                      @if (s.tax_rate) {
-                        <div>
-                          <dt class="text-gray-400">IVA</dt>
-                          <dd class="font-semibold text-gray-900 dark:text-white">{{ s.tax_rate }}%</dd>
-                        </div>
-                      }
-                      @if (s.unit_type) {
-                        <div>
-                          <dt class="text-gray-400">Unidad</dt>
-                          <dd class="font-semibold text-gray-900 dark:text-white">{{ s.unit_type }}</dd>
-                        </div>
-                      }
-                    </dl>
+                    </div>
+
+                    @if (s.duration_minutes || s.estimated_hours) {
+                      <div class="mb-3 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                        @if (s.duration_minutes) {
+                          <span class="inline-flex items-center gap-1">
+                            <i class="far fa-clock"></i>
+                            {{ formatDuration(s.duration_minutes) }}
+                          </span>
+                        }
+                        @if (s.estimated_hours) {
+                          <span class="inline-flex items-center gap-1">
+                            <i class="far fa-hourglass"></i>
+                            {{ s.estimated_hours }} h estimadas
+                          </span>
+                        }
+                      </div>
+                    }
 
                     @if (s.features) {
                       <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 italic line-clamp-2">{{ s.features }}</p>
@@ -215,13 +207,13 @@ import {
                       </details>
                     }
 
-                    <div class="mt-auto pt-3 flex items-center justify-between gap-2 border-t border-gray-100 dark:border-gray-700">
+                    <div class="mt-auto pt-3 flex items-center gap-2 border-t border-gray-100 dark:border-gray-700">
                       @if (s.allow_direct_contracting && s.is_bookable) {
-                        <div class="flex flex-col gap-1.5 w-full">
+                        <div class="flex gap-2 w-full">
                           <button
                             (click)="openContractModal(s)"
                             [disabled]="contracting() === s.id"
-                            class="w-full px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                            class="flex-1 px-3 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
                           >
                             @if (contracting() === s.id) {
                               <span class="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full"></span>
@@ -231,7 +223,7 @@ import {
                           <button
                             type="button"
                             disabled
-                            class="w-full px-4 py-2 text-sm font-medium rounded-md bg-emerald-600 text-white opacity-70 cursor-not-allowed flex items-center justify-center gap-1.5"
+                            class="flex-1 px-3 py-2 text-sm font-medium rounded-md bg-emerald-600 text-white opacity-70 cursor-not-allowed flex items-center justify-center gap-1.5"
                             title="Reservar (Próximamente)"
                           >
                             <i class="fas fa-calendar-plus"></i>
@@ -242,7 +234,7 @@ import {
                         <button
                           (click)="openContractModal(s)"
                           [disabled]="contracting() === s.id"
-                          class="px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
+                          class="flex-1 px-3 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
                         >
                           @if (contracting() === s.id) {
                             <span class="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full"></span>
@@ -253,7 +245,7 @@ import {
                         <button
                           type="button"
                           disabled
-                          class="px-4 py-2 text-sm font-medium rounded-md bg-emerald-600 text-white opacity-70 cursor-not-allowed flex items-center gap-1.5"
+                          class="flex-1 px-3 py-2 text-sm font-medium rounded-md bg-emerald-600 text-white opacity-70 cursor-not-allowed flex items-center justify-center gap-1.5"
                           title="Reservar (Próximamente)"
                         >
                           <i class="fas fa-calendar-plus"></i>
@@ -261,13 +253,6 @@ import {
                         </button>
                       } @else {
                         <span class="text-xs text-gray-400">Consultanos si te interesa</span>
-                      }
-                      @if (s.booking_color) {
-                        <span
-                          class="w-4 h-4 rounded-full flex-shrink-0"
-                          [style.backgroundColor]="s.booking_color"
-                          [title]="'Color: ' + s.booking_color"
-                        ></span>
                       }
                     </div>
                   </article>
@@ -490,12 +475,20 @@ export class PortalServicesComponent implements OnInit {
   // Variants cache: serviceId → { loading, list, error }
   variantsByService = signal<Record<string, { loading: boolean; list: PortalServiceVariant[]; error?: string }>>({});
 
+  // Category lookup: categoryId → { name, color, icon }
+  categoriesById = signal<Record<string, { name: string | null; color: string | null; icon: string | null }>>({});
+
   async ngOnInit() {
     this.loading.set(true);
     const { data, error } = await this.portal.listServices();
     if (data) {
       this.available.set(data.available ?? []);
       this.contracted.set(data.contracted ?? []);
+      const map: Record<string, { name: string | null; color: string | null; icon: string | null }> = {};
+      for (const c of data.categories ?? []) {
+        map[c.id] = { name: c.name, color: c.color, icon: c.icon };
+      }
+      this.categoriesById.set(map);
     }
     if (error) this.errorMessage.set(error.message);
     this.loading.set(false);
@@ -625,6 +618,30 @@ export class PortalServicesComponent implements OnInit {
 
   tagsFor(s: PortalService): string[] | null {
     return Array.isArray((s as any).tags) && (s as any).tags.length > 0 ? (s as any).tags : null;
+  }
+
+  categoryLabel(s: PortalService): string | null {
+    if (!s.category) return null;
+    const fromMap = this.categoriesById()[s.category]?.name;
+    if (fromMap) return fromMap;
+    // If the category is not a UUID, treat it as already-resolved text
+    if (!this.isLikelyUuid(s.category)) return s.category;
+    // Fallback: short UUID prefix
+    return s.category.slice(0, 8);
+  }
+
+  categoryColor(s: PortalService): string | null {
+    if (!s.category) return null;
+    return this.categoriesById()[s.category]?.color ?? null;
+  }
+
+  categoryIcon(s: PortalService): string | null {
+    if (!s.category) return null;
+    return this.categoriesById()[s.category]?.icon ?? null;
+  }
+
+  private isLikelyUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
   }
 
   recurrenceOptions: Array<{ value: 'none' | 'monthly' | 'weekly' | 'yearly'; label: string }> = [

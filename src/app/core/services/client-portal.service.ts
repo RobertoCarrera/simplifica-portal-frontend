@@ -158,6 +158,13 @@ export interface PortalContractedService {
   updated_at?: string;
 }
 
+export interface PortalServiceCategory {
+  id: string;
+  name: string | null;
+  color: string | null;
+  icon: string | null;
+}
+
 export interface PortalServiceVariantPricing {
   period: 'one-time' | 'monthly' | 'annually' | 'custom';
   price: number;
@@ -795,7 +802,11 @@ export class ClientPortalService {
    *  - `contracted`: services the current client has already contracted
    */
   async listServices(): Promise<{
-    data: { available: PortalService[]; contracted: PortalContractedService[] };
+    data: {
+      available: PortalService[];
+      contracted: PortalContractedService[];
+      categories: PortalServiceCategory[];
+    };
     error?: any;
   }> {
     try {
@@ -818,11 +829,15 @@ export class ClientPortalService {
         data: {
           available: json?.available ?? [],
           contracted: json?.contracted ?? [],
+          categories: json?.categories ?? [],
         },
       };
     } catch (e: any) {
       console.error('[ClientPortalService] listServices failed:', e?.message);
-      return { data: { available: [], contracted: [] }, error: { message: e?.message || 'listServices failed' } };
+      return {
+        data: { available: [], contracted: [], categories: [] },
+        error: { message: e?.message || 'listServices failed' },
+      };
     }
   }
 
