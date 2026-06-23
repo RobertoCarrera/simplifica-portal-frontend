@@ -66,7 +66,8 @@
       <div class="relative group">
         <a
           [routerLink]="item.route"
-          routerLinkActive="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-r-2 border-blue-500"
+          routerLinkActive="text-gray-900 dark:text-white font-semibold"
+          [routerLinkActiveOptions]="{ exact: false }"
           (click)="isMobile() && closeSidebar()"
           (mouseenter)="onMouseEnter($event, item.label)"
           (mouseleave)="onMouseLeave()"
