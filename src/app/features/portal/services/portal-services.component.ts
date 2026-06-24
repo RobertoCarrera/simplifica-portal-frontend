@@ -410,6 +410,58 @@ import {
       </div>
     }
 
+    <!-- CASH PAYMENT PENDING CONFIRMATION -->
+    @if (cashPendingOpen()) {
+      <div
+        class="fixed inset-0 z-[1200] flex items-end justify-center p-0 md:p-4"
+        (click)="cashPendingOpen.set(false)"
+      >
+        <div class="absolute inset-0 bg-black/50"></div>
+        <div
+          class="relative bg-white dark:bg-gray-800 w-full max-w-md rounded-t-2xl md:rounded-2xl shadow-2xl p-6 space-y-4 animate-[slideUp_0.25s_ease-out]"
+          (click)="$event.stopPropagation()"
+        >
+          <div class="flex items-center gap-3">
+            <span class="w-12 h-12 rounded-full bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+              <i class="fas fa-hourglass-half text-amber-600 dark:text-amber-400 text-xl"></i>
+            </span>
+            <div class="flex-1 min-w-0">
+              <h3 class="text-base font-semibold text-gray-900 dark:text-white">Solicitud registrada</h3>
+              <p class="text-sm text-gray-500 dark:text-gray-400">Pago en efectivo · pendiente de confirmación</p>
+            </div>
+            <button
+              type="button"
+              (click)="cashPendingOpen.set(false)"
+              class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1"
+              title="Cerrar"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <p class="text-sm text-gray-600 dark:text-gray-300">
+            Hemos registrado tu solicitud. El equipo de Simplifica confirmará el pago en cuanto se haga
+            efectivo y entonces verás el servicio en tu lista de contratados.
+          </p>
+
+          <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-xs text-amber-800 dark:text-amber-300">
+            <i class="fas fa-info-circle mr-1"></i>
+            Si ya realizaste el pago, contáctanos para acelerar la confirmación.
+          </div>
+
+          <button
+            type="button"
+            (click)="cashPendingOpen.set(false)"
+            class="w-full px-4 py-2 text-sm font-medium rounded-md bg-amber-600 text-white hover:bg-amber-700"
+          >
+            Entendido
+          </button>
+        </div>
+      </div>
+    }
+
     <!-- CONTRACT / PAYMENT MODAL -->
     @if (contractModalOpen() && contractModalService(); as svc) {
       <div
@@ -622,6 +674,9 @@ export class PortalServicesComponent implements OnInit {
   // Bottom-sheet toggle for the contracted-services panel
   contractedSheetOpen = signal<boolean>(false);
 
+  /** Cash payment confirmation sheet (shown after the user picks "Efectivo"). */
+  cashPendingOpen = signal<boolean>(false);
+
   // Filtered lists (computed from raw + search)
   filteredAvailable = computed(() => {
     const term = this.availableSearch().trim().toLowerCase();
@@ -696,13 +751,9 @@ export class PortalServicesComponent implements OnInit {
     this.contracting.set(s.id);
     this.errorMessage.set(null);
 
-    // TODO: integrate real payment gateways. For now, the gateway call is
-    // simulated: a short delay to represent the redirect/auth, then we
-    // mark the contract as created in the DB. Cash goes through the same
-    // path but the contracted row keeps status='pending_confirmation' so
-    // the owner has to ack it on the CRM side.
-    await this.simulatePayment(method);
-
+    // 1) Always create the contract in the DB first (status:
+    //    pending_payment for online, pending_confirmation for cash).
+    //    The gateway notify / owner confirmation flips it to 'active'.
     const variant = this.contractModalVariant();
     const { data, error } = await this.portal.contractService({
       service_id: s.id,
@@ -715,21 +766,62 @@ export class PortalServicesComponent implements OnInit {
       recurrence_end: null,
       payment_method: method,
     });
-    this.contracting.set(null);
-    if (data) {
-      this.contracted.set([data, ...this.contracted()]);
-      this.closeContractModal();
-    } else {
-      this.errorMessage.set(error?.message || 'No se pudo contratar el servicio');
+    if (error || !data) {
+      this.contracting.set(null);
+      this.errorMessage.set(error?.message || 'No se pudo iniciar la contratación');
+      return;
     }
+
+    // 2) Dispatch to the gateway.
+    if (method === 'redsys') {
+      await this.openRedsysGateway(data.id);
+      // The user is now on Redsys' hosted page. When they come back to
+      // /portal/redsys-return we'll refresh the contracted list.
+      return;
+    }
+    if (method === 'cash') {
+      this.contracted.set([]); // re-fetch on next load
+      this.contracting.set(null);
+      this.closeContractModal();
+      this.cashPendingOpen.set(true);
+      return;
+    }
+    // Stripe / PayPal: same flow as Redsys but no BFF endpoint yet;
+    // show "coming soon" and let the contract sit in pending_payment.
+    this.contracting.set(null);
+    this.errorMessage.set(
+      `El pago con ${method} aún no está disponible. Tu solicitud quedó registrada como pendiente.`,
+    );
   }
 
-  /** Stand-in for a real Stripe/PayPal/RedSys SDK call. */
-  private simulatePayment(method: 'stripe' | 'paypal' | 'cash' | 'redsys'): Promise<void> {
-    // Cash is instant confirmation (just records the request). Online
-    // gateways would redirect here in a real integration.
-    const delay = method === 'cash' ? 250 : 900;
-    return new Promise((resolve) => setTimeout(resolve, delay));
+  /** Redirects the browser to the Redsys hosted payment page. */
+  private async openRedsysGateway(contractId: string): Promise<void> {
+    try {
+      this.contracting.set(this.contractModalService()?.id ?? null);
+      const res = await this.portal.initRedsysPayment(contractId);
+      if (!res || !res.form) {
+        this.contracting.set(null);
+        this.errorMessage.set('No se pudo iniciar el pago con Redsys');
+        return;
+      }
+      // Build and auto-submit a hidden form to Redsys.
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = res.redirect_url;
+      form.style.display = 'none';
+      for (const [k, v] of Object.entries(res.form)) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = k;
+        input.value = String(v);
+        form.appendChild(input);
+      }
+      document.body.appendChild(form);
+      form.submit();
+    } catch (e: any) {
+      this.contracting.set(null);
+      this.errorMessage.set(e?.message || 'Error iniciando el pago con Redsys');
+    }
   }
 
   getVariantsFor(s: PortalService): PortalServiceVariant[] {
@@ -808,13 +900,14 @@ export class PortalServicesComponent implements OnInit {
   }
 
   variantPeriodLabel(p: string): string {
-    switch (p) {
-      case 'one-time': return 'Pago único';
-      case 'monthly': return 'Mensual';
-      case 'annually': return 'Anual';
-      case 'custom': return 'Personalizado';
-      default: return p;
-    }
+    if (!p) return '';
+    const k = p.toLowerCase();
+    if (k === 'one-time' || k === 'one_time' || k === 'puntual' || k === 'único' || k === 'unico') return 'Pago único';
+    if (k === 'monthly' || k === 'mensual') return 'Mensual';
+    if (k === 'annually' || k === 'annual' || k === 'anual' || k === 'yearly') return 'Anual';
+    if (k === 'weekly' || k === 'semanal') return 'Semanal';
+    if (k === 'custom' || k === 'personalizado') return 'Personalizado';
+    return p;
   }
 
   formatPrice(p?: number | null): string {

@@ -923,6 +923,38 @@ export class ClientPortalService {
     }
   }
 
+  /**
+   * Initialize a Redsys payment for a contract. Returns the URL
+   * Redsys expects the client to POST the form to, and the form
+   * fields (Ds_MerchantParameters, Ds_Signature, ...) to be
+   * auto-submitted.
+   */
+  async initRedsysPayment(contractId: string): Promise<{ redirect_url: string; form: Record<string, string> } | null> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/redsys-init';
+      const res = await fetch(bffUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ contract_id: contractId }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`redsys-init returned ${res.status}: ${txt.substring(0, 300)}`);
+      }
+      const json = await res.json();
+      return { redirect_url: json?.redirect_url, form: json?.form };
+    } catch (e: any) {
+      console.error('[ClientPortalService] initRedsysPayment failed:', e?.message);
+      return null;
+    }
+  }
+
   /** Create a task in a project. */
   async createTask(projectId: string, input: { title: string; due_date?: string | null }): Promise<{ data: any | null; error?: any }> {
     try {
