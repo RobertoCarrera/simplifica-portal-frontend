@@ -15,7 +15,7 @@ import {
   imports: [CommonModule, FormsModule, RouterModule],
   template: `
     <div class="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
-      <!-- Header -->
+      <!-- Header: solo título + descripción. Las pills viven dentro de la toolbar del pane. -->
       <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div class="px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div class="min-w-0">
@@ -24,35 +24,25 @@ import {
               Catálogo de servicios disponibles de tu empresa y los que tienes contratados.
             </p>
           </div>
-          <div class="flex items-center gap-3 flex-wrap">
-            <div class="flex items-center gap-2 text-xs">
-              <span class="px-3 py-1 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-medium">
-                {{ available().length }} disponibles
-              </span>
-              <span class="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 font-medium">
-                {{ contracted().length }} contratados
-              </span>
-            </div>
-            <div class="relative">
-              <input
-                type="search"
-                [ngModel]="availableSearch()"
-                (ngModelChange)="availableSearch.set($event)"
-                placeholder="Filtrar por nombre o categoría…"
-                class="pl-8 pr-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg w-64 focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 dark:text-gray-200"
-              />
-              <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-              @if (availableSearch()) {
-                <button
-                  type="button"
-                  (click)="availableSearch.set('')"
-                  class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  title="Limpiar filtro"
-                >
-                  <i class="fas fa-times text-xs"></i>
-                </button>
-              }
-            </div>
+          <div class="relative">
+            <input
+              type="search"
+              [ngModel]="availableSearch()"
+              (ngModelChange)="availableSearch.set($event)"
+              placeholder="Filtrar por nombre o categoría…"
+              class="pl-8 pr-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg w-64 focus:ring-2 focus:ring-blue-500 outline-none text-gray-700 dark:text-gray-200"
+            />
+            <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+            @if (availableSearch()) {
+              <button
+                type="button"
+                (click)="availableSearch.set('')"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                title="Limpiar filtro"
+              >
+                <i class="fas fa-times text-xs"></i>
+              </button>
+            }
           </div>
         </div>
       </div>
@@ -291,25 +281,25 @@ import {
     <!-- CONTRACTED SERVICES BOTTOM SHEET (mobile-first, slides up from bottom) -->
     @if (contractedSheetOpen()) {
       <div
-        class="fixed inset-0 z-[1200]"
+        class="fixed inset-0 z-[1200] flex items-end justify-center"
         (click)="contractedSheetOpen.set(false)"
       >
-        <div class="absolute inset-0 bg-black/50"></div>
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
         <div
-          class="absolute bottom-0 left-0 right-0 mx-auto max-w-2xl bg-white dark:bg-gray-800 rounded-t-2xl shadow-2xl flex flex-col overflow-hidden max-h-[85vh] animate-[slideUp_0.25s_ease-out]"
+          class="relative w-full md:max-w-5xl bg-white dark:bg-gray-800 rounded-t-2xl md:rounded-t-2xl shadow-2xl flex flex-col overflow-hidden max-h-[92vh] md:max-h-[88vh] animate-[slideUp_0.25s_ease-out]"
           (click)="$event.stopPropagation()"
         >
           <!-- Drag handle for mobile visual cue -->
-          <div class="flex justify-center pt-2 md:hidden">
-            <div class="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+          <div class="flex justify-center pt-3 pb-2">
+            <div class="w-12 h-1.5 rounded-full bg-gray-300 dark:bg-gray-600"></div>
           </div>
-          <div class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
-            <div class="flex items-center gap-2 flex-1 min-w-0">
-              <span class="w-9 h-9 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
+          <div class="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-3">
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+              <span class="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
                 <i class="fas fa-briefcase text-emerald-600 dark:text-emerald-400"></i>
               </span>
               <div class="min-w-0">
-                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Mis servicios contratados</h3>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Mis servicios contratados</h3>
                 <p class="text-xs text-gray-500 dark:text-gray-400">
                   {{ filteredContracted().length }} de {{ contracted().length }} contratados
                 </p>
@@ -320,15 +310,25 @@ import {
                 type="search"
                 [ngModel]="contractedSearch()"
                 (ngModelChange)="contractedSearch.set($event)"
-                placeholder="Filtrar…"
+                placeholder="Filtrar contratados…"
                 class="pl-8 pr-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg w-56 focus:ring-2 focus:ring-emerald-500 outline-none text-gray-700 dark:text-gray-200"
               />
               <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+              @if (contractedSearch()) {
+                <button
+                  type="button"
+                  (click)="contractedSearch.set('')"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  title="Limpiar filtro"
+                >
+                  <i class="fas fa-times text-xs"></i>
+                </button>
+              }
             </div>
             <button
               type="button"
               (click)="contractedSheetOpen.set(false)"
-              class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 flex-shrink-0"
+              class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2 flex-shrink-0 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
               title="Cerrar"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -405,6 +405,20 @@ import {
                 </tbody>
               </table>
             }
+          </div>
+          <!-- Sticky footer with summary + close action -->
+          <div class="flex-shrink-0 px-6 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between gap-3">
+            <span class="text-xs text-gray-500 dark:text-gray-400">
+              <i class="fas fa-info-circle mr-1"></i>
+              Arrastra hacia abajo o pulsa fuera para cerrar
+            </span>
+            <button
+              type="button"
+              (click)="contractedSheetOpen.set(false)"
+              class="px-4 py-1.5 text-sm font-medium rounded-md bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              Cerrar
+            </button>
           </div>
         </div>
       </div>
