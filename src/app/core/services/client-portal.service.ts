@@ -187,7 +187,6 @@ export interface PortalServiceVariant {
     color?: string | null;
   } | null;
   is_active?: boolean;
-  is_hidden?: boolean;
   sort_order?: number;
   created_at?: string;
   updated_at?: string;
