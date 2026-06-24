@@ -151,6 +151,15 @@ export const PORTAL_ROUTES: Routes = [
             (m) => m.PortalReservasComponent,
           ),
       },
+      // Redsys return URL — user lands here after the hosted payment page.
+      // Re-fetches the services list and shows a feedback card.
+      {
+        path: 'redsys-return',
+        loadComponent: () =>
+          import('./features/portal/redsys-return/portal-redsys-return.component').then(
+            (m) => m.PortalRedsysReturnComponent,
+          ),
+      },
     ],
   },
 

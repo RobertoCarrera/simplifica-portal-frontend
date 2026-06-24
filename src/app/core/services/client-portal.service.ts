@@ -933,7 +933,7 @@ export class ClientPortalService {
     try {
       const token = await this.requireAccessToken();
       const anonKey = this.auth.supabaseKey;
-      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/redsys-init';
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-redsys-checkout';
       const res = await fetch(bffUrl, {
         method: 'POST',
         headers: {
