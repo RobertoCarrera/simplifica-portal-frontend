@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
@@ -80,7 +80,23 @@ import {
                       }
                       <h3 class="text-base font-semibold text-gray-900 dark:text-white leading-snug">{{ s.name }}</h3>
                       @if (s.description) {
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1.5 line-clamp-3" [innerHTML]="s.description"></p>
+                        <p
+                          #serviceDescription
+                          [attr.data-service-id]="s.id"
+                          class="text-sm text-gray-500 dark:text-gray-400 mt-1.5"
+                          [class.line-clamp-3]="!isDescriptionExpanded(s.id)"
+                          [innerHTML]="s.description"
+                        ></p>
+                        @if (overflownDescriptions().has(s.id) || isDescriptionExpanded(s.id)) {
+                          <button
+                            type="button"
+                            class="mt-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline focus:outline-none focus:underline"
+                            (click)="toggleDescription(s.id)"
+                            [attr.aria-expanded]="isDescriptionExpanded(s.id)"
+                          >
+                            {{ isDescriptionExpanded(s.id) ? 'Ver menos' : 'Ver más' }}
+                          </button>
+                        }
                       } @else {
                         <p class="text-sm text-gray-400 dark:text-gray-500 mt-1.5 italic">Sin descripción</p>
                       }
@@ -625,7 +641,7 @@ import {
     }
   `,
 })
-export class PortalServicesComponent implements OnInit {
+export class PortalServicesComponent implements OnInit, AfterViewChecked {
   private portal = inject(ClientPortalService);
 
   loading = signal<boolean>(true);
@@ -640,6 +656,59 @@ export class PortalServicesComponent implements OnInit {
   contractModalVariant = signal<PortalServiceVariant | null>(null);
   contractModalPricingPeriod = signal<'one-time' | 'monthly' | 'annually' | 'custom' | null>(null);
   paymentMethod = signal<'stripe' | 'paypal' | 'cash' | 'redsys' | null>(null);
+
+  // Description expand/collapse state.
+  // - `expandedDescriptions` tracks which service ids the user has manually
+  //   expanded (per-session, not persisted).
+  // - `overflownDescriptions` tracks which descriptions are physically
+  //   truncated by line-clamp (i.e., need the "Ver más" button).
+  expandedDescriptions = signal<Set<string>>(new Set());
+  overflownDescriptions = signal<Set<string>>(new Set());
+
+  @ViewChildren('serviceDescription') descriptionRefs!: QueryList<ElementRef<HTMLElement>>;
+
+  isDescriptionExpanded(id: string): boolean {
+    return this.expandedDescriptions().has(id);
+  }
+
+  toggleDescription(id: string): void {
+    const next = new Set(this.expandedDescriptions());
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    this.expandedDescriptions.set(next);
+  }
+
+  /**
+   * After every view check, measure each service description paragraph.
+   * If its content overflows the clamped height (scrollHeight > clientHeight),
+   * mark the service as needing the "Ver más" button.
+   *
+   * Skipped when the description is already expanded (clamp removed, so
+   * overflow measurement would always be false).
+   */
+  ngAfterViewChecked(): void {
+    if (!this.descriptionRefs) return;
+    const overflown = new Set<string>();
+    for (const ref of this.descriptionRefs.toArray()) {
+      const el = ref.nativeElement;
+      const id = el.dataset['serviceId'];
+      if (!id) continue;
+      if (this.isDescriptionExpanded(id)) continue;
+      // +1px tolerance for sub-pixel rounding
+      if (el.scrollHeight - el.clientHeight > 1) {
+        overflown.add(id);
+      }
+    }
+    // Avoid unnecessary signal writes when nothing changed
+    const current = this.overflownDescriptions();
+    if (current.size !== overflown.size ||
+        ![...overflown].every(id => current.has(id))) {
+      this.overflownDescriptions.set(overflown);
+    }
+  }
 
   /** Today in YYYY-MM-DD — used as the start_date of every contract. */
   today(): string {
