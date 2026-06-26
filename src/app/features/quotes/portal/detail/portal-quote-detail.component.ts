@@ -52,7 +52,6 @@ import { PortalClientUser } from "../../../../core/ports/iportal-auth";
             <p class="text-sm text-gray-400 dark:text-gray-500 mt-1">Puede que no tengas acceso o haya sido eliminado.</p>
           </div>
         }
-
         @if (!loading() && quote(); as q) {
           <!-- Header -->
           <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -91,24 +90,6 @@ import { PortalClientUser } from "../../../../core/ports/iportal-auth";
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span class="text-green-700 dark:text-green-300 font-medium">Este presupuesto está pagado</span>
-            </div>
-          }
-          @if (!isAcceptedOrInvoiced() && paymentStatus() === 'pendiente') {
-            <div class="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center justify-between gap-3 flex-wrap">
-              <div class="flex items-center gap-3">
-                <svg class="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span class="text-amber-700 dark:text-amber-300 font-medium">Pago pendiente</span>
-              </div>
-              @if (!isExpired()) {
-                <button
-                  (click)="payNow()"
-                  class="px-6 py-2.5 rounded-lg font-medium text-sm bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 transition-all shadow-sm"
-                >
-                  Pagar ahora
-                </button>
-              }
             </div>
           }
           @if (paymentStatus() === 'vencido') {
@@ -363,19 +344,10 @@ import { PortalClientUser } from "../../../../core/ports/iportal-auth";
                   [disabled]="processing()"
                   class="px-6 py-3 rounded-lg font-medium text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
-                  ✓ Aceptar presupuesto
-                </button>
-              }
-              @if (paymentStatus() === 'pendiente' && !isExpired()) {
-                <button
-                  (click)="payNow()"
-                  [disabled]="processing()"
-                  class="px-6 py-3 rounded-lg font-medium text-sm bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 transition-all shadow-sm ml-auto"
-                >
-                  Pagar ahora
-                </button>
-              }
-            </div>
+                   ✓ Aceptar presupuesto
+                 </button>
+               }
+             </div>
           </div>
         }
       </div>

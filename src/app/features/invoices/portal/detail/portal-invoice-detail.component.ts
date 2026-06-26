@@ -105,12 +105,6 @@ import { ToastService } from "../../../../shared/services/toast.service";
                     >Pagada</span
                   >
                 }
-                @if (inv.payment_status === "pending") {
-                  <span
-                    class="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                    >Pago Pendiente</span
-                  >
-                }
               </div>
             </div>
           </div>

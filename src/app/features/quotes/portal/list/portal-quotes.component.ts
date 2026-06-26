@@ -156,7 +156,7 @@ import { RealtimeChannel } from "@supabase/supabase-js";
                 @for (q of filteredQuotes(); track q.id) {
                   <tr
                     class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-                    [routerLink]="['/portal/presupuestos', q.id]"
+                    [routerLink]="['/portal/quotes', q.id]"
                   >
                     <td class="px-4 py-4 text-sm font-mono text-gray-900 dark:text-gray-100 whitespace-nowrap truncate">
                       {{ q.full_quote_number || '—' }}
@@ -216,7 +216,7 @@ import { RealtimeChannel } from "@supabase/supabase-js";
           <div class="md:hidden space-y-4">
             @for (q of filteredQuotes(); track q.id) {
               <a
-                [routerLink]="['/portal/presupuestos', q.id]"
+                [routerLink]="['/portal/quotes', q.id]"
                 class="block bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
               >
                 <div class="flex items-start justify-between mb-3">
