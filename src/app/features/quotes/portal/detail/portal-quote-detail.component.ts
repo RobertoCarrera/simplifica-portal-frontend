@@ -171,19 +171,38 @@ import { PortalClientUser } from "../../../../core/ports/iportal-auth";
             </div>
           }
 
-          <!-- Client / Issuer info (always rendered, populated from auth + BFF) -->
+          <!-- Client / Issuer info (rendered from BFF DTO so we show full fiscal data) -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <!-- Client -->
             <div class="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-5">
               <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                 {{ 'portal.quoteDetail.client' | transloco }}
               </div>
-              @if (clientName() || clientEmail()) {
+              @if (q.client; as c) {
                 <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {{ clientName() || '—' }}
+                  {{ c.name || c.business_name || '—' }}
                 </div>
-                @if (clientEmail()) {
-                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ clientEmail() }}</div>
+                @if (c.cif_nif) {
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ c.cif_nif }}</div>
+                } @else if (c.dni) {
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ c.dni }}</div>
+                }
+                @if (c.email) {
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ c.email }}</div>
+                }
+                @if (c.phone) {
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ c.phone }}</div>
+                }
+                @if (c.address_line || c.postal_code || c.city || c.country) {
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-2 whitespace-pre-line">
+                    {{ c.address_line }}@if (c.postal_code || c.city) {<br>{{ c.postal_code }} {{ c.city }}}
+                    @if (c.country) {<br>{{ c.country }}}
+                  </div>
+                }
+                @if (!c.cif_nif && !c.dni) {
+                  <div class="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-700 dark:text-amber-300">
+                    {{ 'portal.quoteDetail.missingNif' | transloco }}
+                  </div>
                 }
               } @else {
                 <div class="text-sm text-gray-400 dark:text-gray-500">—</div>
@@ -191,12 +210,39 @@ import { PortalClientUser } from "../../../../core/ports/iportal-auth";
             </div>
             <!-- Issuer / Company -->
             <div class="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-5">
-              <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                {{ 'portal.quoteDetail.issuer' | transloco }}
+              <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                <span>{{ 'portal.quoteDetail.issuer' | transloco }}</span>
+                @if (q.issuer?.logo_url) {
+                  <img [src]="q.issuer.logo_url" alt="" class="h-5 w-auto opacity-80">
+                }
               </div>
-              <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                {{ issuerName() || '—' }}
-              </div>
+              @if (q.issuer; as iss) {
+                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {{ iss.name || '—' }}
+                </div>
+                @if (iss.cif_nif) {
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ iss.cif_nif }}</div>
+                }
+                @if (iss.email) {
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ iss.email }}</div>
+                }
+                @if (iss.phone) {
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ iss.phone }}</div>
+                }
+                @if (iss.address_line || iss.postal_code || iss.city || iss.country) {
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-2 whitespace-pre-line">
+                    {{ iss.address_line }}@if (iss.postal_code || iss.city) {<br>{{ iss.postal_code }} {{ iss.city }}}
+                    @if (iss.country) {<br>{{ iss.country }}}
+                  </div>
+                }
+                @if (!iss.cif_nif) {
+                  <div class="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-700 dark:text-amber-300">
+                    {{ 'portal.quoteDetail.missingIssuerNif' | transloco }}
+                  </div>
+                }
+              } @else {
+                <div class="text-sm text-gray-400 dark:text-gray-500">—</div>
+              }
             </div>
           </div>
 
@@ -261,16 +307,27 @@ import { PortalClientUser } from "../../../../core/ports/iportal-auth";
 
           <!-- Total section -->
           <div class="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-6">
+            <!-- prices_include_tax badge — drives how the breakdown below reads -->
+            <div class="mb-4">
+              <span
+                class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
+                [ngClass]="q.prices_include_tax
+                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                  : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'"
+              >
+                {{ (q.prices_include_tax ? 'portal.quoteDetail.pricesIncludeTax' : 'portal.quoteDetail.pricesExcludeTax') | transloco }}
+              </span>
+            </div>
             <div class="space-y-2 mb-4">
-              <!-- Subtotal -->
+              <!-- Base imponible -->
               <div class="flex justify-between text-sm">
-                <span class="text-gray-600 dark:text-gray-400">Subtotal</span>
+                <span class="text-gray-600 dark:text-gray-400">{{ 'portal.quoteDetail.taxBase' | transloco }}</span>
                 <span class="text-gray-900 dark:text-gray-100 font-medium">{{ breakdown().subtotal | number: '1.2-2' }} €</span>
               </div>
-              <!-- Tax -->
+              <!-- IVA -->
               @if (breakdown().taxAmount > 0) {
                 <div class="flex justify-between text-sm">
-                  <span class="text-gray-600 dark:text-gray-400">IVA</span>
+                  <span class="text-gray-600 dark:text-gray-400">{{ 'portal.quoteDetail.taxAmount' | transloco }}</span>
                   <span class="text-gray-900 dark:text-gray-100 font-medium">{{ breakdown().taxAmount | number: '1.2-2' }} €</span>
                 </div>
               }
@@ -284,7 +341,7 @@ import { PortalClientUser } from "../../../../core/ports/iportal-auth";
             </div>
             <div class="border-t border-gray-200 dark:border-gray-700 pt-4 flex items-center justify-between">
               <div>
-                <div class="text-sm text-gray-500 dark:text-gray-400">Total a pagar</div>
+                <div class="text-sm text-gray-500 dark:text-gray-400">{{ 'portal.quoteDetail.total' | transloco }}</div>
               </div>
               <div class="text-3xl font-bold text-gray-900 dark:text-gray-100">
                 {{ breakdown().total | number: '1.2-2' }} €
@@ -442,12 +499,20 @@ export class PortalQuoteDetailComponent implements OnInit {
     return new Date(q.valid_until) < new Date();
   });
 
-  /** Full breakdown */
+  /** Full breakdown — respects `prices_include_tax`:
+   *   - false (default): unit_price is BASE (sin IVA), IVA = base * rate
+   *   - true:            unit_price is TOTAL (IVA incluido), base = total/(1+rate)
+   *
+   * When the BFF returns quote-level subtotal/tax_amount (computed server-side
+   * with the same rules the PDF uses), we prefer those to keep the portal and
+   * the PDF in sync. Otherwise we recompute from items, picking the formula
+   * based on the `prices_include_tax` flag. */
   breakdown = computed(() => {
     const q = this.quote();
     if (!q) return { subtotal: 0, taxAmount: 0, irpfAmount: 0, total: 0 };
 
-    // If backend provides explicit subtotal/tax, use those
+    // Server-provided totals win — they are computed with the same logic
+    // the CRM uses to render the PDF, so the portal always agrees with it.
     if (q.subtotal != null || q.tax_amount != null) {
       return {
         subtotal: Number(q.subtotal || 0),
@@ -457,22 +522,62 @@ export class PortalQuoteDetailComponent implements OnInit {
       };
     }
 
-    // Compute from items
+    // Recompute from items. Aggregate tax rate across all lines (used when
+    // `prices_include_tax=true` to back out the base from a single total).
     const items = q.items || [];
+    const pricesIncludeTax = q.prices_include_tax === true;
+    let aggregateTaxRate = 0;
+    let runningTaxWeight = 0;
+    for (const it of items) {
+      const qty = Number(it.quantity) || 0;
+      const rate = Number(it.tax_rate || 0);
+      aggregateTaxRate += rate * qty;
+      runningTaxWeight += qty;
+    }
+    const effectiveTaxRate = runningTaxWeight > 0 ? aggregateTaxRate / runningTaxWeight : 0;
+
     let subtotal = 0;
     let taxAmount = 0;
+    let total = 0;
     for (const item of items) {
       const qty = Number(item.quantity) || 0;
       const price = Number(item.unit_price) || 0;
       const discount = Number(item.discount_percent || 0) / 100;
       const taxRate = Number(item.tax_rate || 0) / 100;
 
-      const lineSubtotal = qty * price * (1 - discount);
-      const lineTax = lineSubtotal * taxRate;
-      subtotal += lineSubtotal;
-      taxAmount += lineTax;
+      const lineGross = qty * price * (1 - discount);
+      if (pricesIncludeTax) {
+        // price already includes IVA — back out the base, then derive IVA.
+        const factor = 1 + taxRate;
+        const lineBase = factor > 0 ? lineGross / factor : lineGross;
+        const lineTax = lineGross - lineBase;
+        subtotal += lineBase;
+        taxAmount += lineTax;
+        total += lineGross;
+      } else {
+        // price is base — apply tax on top.
+        const lineTax = lineGross * taxRate;
+        subtotal += lineGross;
+        taxAmount += lineTax;
+        total += lineGross + lineTax;
+      }
     }
-    const total = subtotal + taxAmount;
+
+    // Sanity fallback: if items yield 0 but we have a totals row, use it.
+    if (total === 0 && q.total_amount != null) {
+      const t = Number(q.total_amount);
+      if (pricesIncludeTax && effectiveTaxRate > 0) {
+        const factor = 1 + effectiveTaxRate;
+        subtotal = t / factor;
+        taxAmount = t - subtotal;
+        total = t;
+      } else {
+        subtotal = t;
+        taxAmount = 0;
+        total = t;
+      }
+    }
+
     return {
       subtotal: Math.round(subtotal * 100) / 100,
       taxAmount: Math.round(taxAmount * 100) / 100,

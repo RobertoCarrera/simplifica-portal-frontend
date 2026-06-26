@@ -42,7 +42,14 @@
       "alreadyAccepted": "Pressupost acceptat",
       "serviceDescription": "Descripció del servei",
       "client": "Client",
-      "issuer": "Emissor"
+      "issuer": "Emissor",
+      "missingNif": "Falta el teu NIF/CIF. Afegeix-lo a Configuració → Dades fiscals.",
+      "missingIssuerNif": "L'empresa no té configurat el NIF/CIF emissor.",
+      "pricesIncludeTax": "Preus amb IVA inclòs",
+      "pricesExcludeTax": "Preus sense IVA",
+      "taxBase": "Base imposable",
+      "taxAmount": "IVA",
+      "total": "Total"
     }
   },
   "cookie": {

@@ -42,7 +42,14 @@
       "alreadyAccepted": "Angebot angenommen",
       "serviceDescription": "Leistungsbeschreibung",
       "client": "Kunde",
-      "issuer": "Aussteller"
+      "issuer": "Aussteller",
+      "missingNif": "Fehlende Steuer-ID. Bitte unter Einstellungen → Steuerdaten hinzufügen.",
+      "missingIssuerNif": "Das Unternehmen hat keine Steuer-ID (Aussteller) konfiguriert.",
+      "pricesIncludeTax": "Preise inklusive MwSt.",
+      "pricesExcludeTax": "Preise ohne MwSt.",
+      "taxBase": "Steuerbasis",
+      "taxAmount": "MwSt.",
+      "total": "Gesamt"
     }
   },
   "cookie": {
