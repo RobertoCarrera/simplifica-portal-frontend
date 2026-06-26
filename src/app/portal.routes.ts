@@ -65,6 +65,19 @@ export const PORTAL_ROUTES: Routes = [
             (m) => m.PortalQuoteDetailComponent,
           ),
       },
+      // English alias for the quote detail page. Loads the same component
+      // as /portal/presupuestos/:id so both URLs render the same view
+      // (the component is locale-agnostic and reads its own copy via
+      // transloco). Kept as a separate route instead of a redirect so
+      // users landing on the English URL don't see a flicker when the
+      // router replaces the URL.
+      {
+        path: 'portal/quotes/:id',
+        loadComponent: () =>
+          import('./features/quotes/portal/detail/portal-quote-detail.component').then(
+            (m) => m.PortalQuoteDetailComponent,
+          ),
+      },
       // Invoices (Facturas)
       {
         path: 'facturas',

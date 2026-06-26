@@ -488,24 +488,29 @@ export class PortalQuoteDetailComponent implements OnInit {
     // portalUserSubject on PortalAuthService is not accessible from here).
     this.portalClient.set(await this.auth.getCurrentClient());
 
-    // The BFF currently exposes /quotes (list) but no /quotes/:id endpoint, so we
-    // fetch the list and find the row client-side. When the BFF gains a detail
-    // endpoint, swap this for svc.getQuote(id) — the template already accepts
-    // either shape (it reads from q.items, q.title, etc.).
-    const [{ data: list }, companies] = await Promise.all([
-      this.svc.listQuotes(),
+    // Use the BFF /quotes/:id detail endpoint, which returns the quote +
+    // its line items + the quote-level description + accepted_at. This
+    // is what the detail template needs (q.items, q.description,
+    // q.accepted_at). Falls back to listQuotes+find only if the BFF
+    // returns a non-OK status so the UI never gets stuck on the spinner
+    // because of a transient BFF error.
+    const [detailRes, companies] = await Promise.all([
+      this.svc.getQuote(id),
       this.svc.getCompanies(),
     ]);
 
     this.companies.set(companies || []);
 
-    const found = (list || []).find((x: any) => x.id === id);
-    if (found) {
-      this.quote.set(found);
-    } else if (!list) {
-      console.error("[portal-quote-detail] listQuotes returned no data");
+    if (detailRes.data) {
+      this.quote.set(detailRes.data);
+    } else if (detailRes.error && detailRes.error !== "Quote not found") {
+      // Try the list endpoint as a fallback so the page is still usable.
+      const { data: list } = await this.svc.listQuotes();
+      const found = (list || []).find((x: any) => x.id === id);
+      if (found) this.quote.set(found);
     } else {
-      console.warn(`[portal-quote-detail] quote ${id} not found in client's list`);
+      // 404 from BFF → leave quote() as null so the "Presupuesto no
+      // encontrado" empty state renders.
     }
     this.loading.set(false);
   }
