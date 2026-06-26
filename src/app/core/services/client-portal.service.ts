@@ -280,7 +280,7 @@ export class ClientPortalService {
     }
   }
 
-  async listQuotes(): Promise<{ data: any[]; error?: any }> {
+  async listQuotes(): Promise<{ data: any[]; error?: any; debug?: any }> {
     try {
       const token = await this.requireAccessToken();
       const anonKey = this.auth.supabaseKey;
@@ -300,7 +300,9 @@ export class ClientPortalService {
       }
 
       const json = await res.json();
-      return { data: json?.data ?? [], error: null };
+      // Surface server-side debug info (client_id, company_id, count, source)
+      // so the UI can render a debug pill without depending on console.log.
+      return { data: json?.data ?? [], error: null, debug: json?._debug ?? null };
     } catch (e: any) {
       return {
         data: [],

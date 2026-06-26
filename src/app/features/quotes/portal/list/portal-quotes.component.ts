@@ -277,6 +277,26 @@ import { RealtimeChannel } from "@supabase/supabase-js";
         }
       </div>
     </div>
+
+    <!-- DEBUG pill: server-side BFF context. Helps verify in the UI that
+         the right client_id / company_id is being used and the right DB
+         (crm vs portal mirror) is queried. Remove once the bug is fixed. -->
+    <div
+      class="fixed bottom-3 right-3 z-50 max-w-[260px] pointer-events-none"
+      data-testid="quotes-debug-pill"
+    >
+      <div class="bg-amber-50 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-lg shadow-lg px-3 py-2 text-[11px] font-mono leading-tight text-amber-900 dark:text-amber-200">
+        <div class="font-semibold mb-1 text-amber-700 dark:text-amber-300">DEBUG · quotes BFF</div>
+        @if (debug(); as d) {
+          <div>client: <span class="font-semibold">{{ d.client_id ? (d.client_id | slice:0:8) + '…' : '—' }}</span></div>
+          <div>company: <span class="font-semibold">{{ d.company_id ? (d.company_id | slice:0:8) + '…' : '—' }}</span></div>
+          <div>count: <span class="font-semibold">{{ d.count ?? '?' }}</span></div>
+          <div>source: <span class="font-semibold">{{ d.source || '?' }}</span></div>
+        } @else {
+          <div class="text-red-600 dark:text-red-400">no _debug in response</div>
+        }
+      </div>
+    </div>
   `,
 })
 export class PortalQuotesComponent implements OnInit, OnDestroy {
@@ -288,6 +308,8 @@ export class PortalQuotesComponent implements OnInit, OnDestroy {
   quotes = signal<ClientPortalQuote[]>([]);
   loading = signal<boolean>(true);
   error = signal<string | null>(null);
+  /** Server-side debug payload (client_id / company_id / count / source) */
+  debug = signal<{ client_id?: string; company_id?: string; count?: number; source?: string } | null>(null);
 
   searchTerm = signal<string>("");
   statusFilter = signal<string>("");
@@ -365,11 +387,13 @@ export class PortalQuotesComponent implements OnInit, OnDestroy {
   async reload() {
     this.loading.set(true);
     this.error.set(null);
-    const { data, error } = await this.svc.listQuotes();
+    const { data, error, debug } = await this.svc.listQuotes();
     if (error) {
       this.error.set(error.message || "Error al cargar presupuestos");
+      this.debug.set(null);
     } else {
       this.quotes.set(data || []);
+      this.debug.set(debug || null);
     }
     this.loading.set(false);
   }
