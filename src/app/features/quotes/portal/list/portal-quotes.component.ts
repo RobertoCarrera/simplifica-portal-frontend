@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, inject, signal, computed } from "@angular
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { RouterModule, Router, ActivatedRoute } from "@angular/router";
+import { TranslocoModule } from "@jsverse/transloco";
 import {
   ClientPortalService,
   ClientPortalQuote,
@@ -12,15 +13,13 @@ import {
 } from "../../../../core/services/client-portal.service";
 import { ToastService } from "../../../../shared/services/toast.service";
 import { RealtimeChannel } from "@supabase/supabase-js";
-import { environment } from "../../../../../environments/environment";
-
 @Component({
   selector: "app-portal-quotes",
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule],
+  imports: [CommonModule, RouterModule, FormsModule, TranslocoModule],
   template: `
     <div class="p-4 sm:p-6 lg:p-8">
-      <div class="max-w-5xl mx-auto">
+      <div class="w-full">
         <!-- Header -->
         <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">
@@ -140,77 +139,77 @@ import { environment } from "../../../../../environments/environment";
             <div class="px-6 py-3 border-b border-gray-200 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400">
               {{ filteredQuotes().length }} presupuesto{{ filteredQuotes().length !== 1 ? 's' : '' }}
             </div>
-            <div class="overflow-x-auto">
-              <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-                <thead class="bg-gray-50 dark:bg-gray-800/50">
-                  <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Número</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Título</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Fecha</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Vencimiento</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Periodicidad</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
-                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total</th>
-                    <th class="px-6 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
-                  @for (q of filteredQuotes(); track q.id) {
-                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                      <td class="px-6 py-4 text-sm font-mono text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                        {{ q.full_quote_number || '—' }}
-                      </td>
-                      <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 max-w-[200px] truncate">
-                        {{ q.title || 'Sin título' }}
-                      </td>
-                      <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                        {{ q.quote_date | date: 'dd/MM/yyyy' }}
-                      </td>
-                      <td class="px-6 py-4 text-sm whitespace-nowrap"
-                        [class.text-red-600]="isExpired(q)"
-                        [class.dark:text-red-400]="isExpired(q)"
-                        [class.text-gray-600]="!isExpired(q)"
-                        [class.dark:text-gray-400]="!isExpired(q)">
-                        {{ q.valid_until | date: 'dd/MM/yyyy' }}
-                        @if (isExpired(q)) {
-                          <span class="ml-1 text-xs">⚠</span>
+            <table class="w-full table-fixed divide-y divide-gray-200 dark:divide-gray-800">
+              <thead class="bg-gray-50 dark:bg-gray-800/50">
+                <tr>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[13%]">Número</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Título</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[10%]">Fecha</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[11%]">Vencimiento</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[12%]">Periodicidad</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[11%]">Estado</th>
+                  <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[12%]">Total</th>
+                  <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[15%]"></th>
+                </tr>
+              </thead>
+              <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                @for (q of filteredQuotes(); track q.id) {
+                  <tr
+                    class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                    [routerLink]="['/portal/presupuestos', q.id]"
+                  >
+                    <td class="px-4 py-4 text-sm font-mono text-gray-900 dark:text-gray-100 whitespace-nowrap truncate">
+                      {{ q.full_quote_number || '—' }}
+                    </td>
+                    <td class="px-4 py-4 text-sm text-gray-700 dark:text-gray-300 truncate" [title]="q.title || ''">
+                      {{ q.title || 'Sin título' }}
+                    </td>
+                    <td class="px-4 py-4 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                      {{ q.quote_date | date: 'dd/MM/yyyy' }}
+                    </td>
+                    <td class="px-4 py-4 text-sm whitespace-nowrap"
+                      [class.text-red-600]="isExpired(q)"
+                      [class.dark:text-red-400]="isExpired(q)"
+                      [class.text-gray-600]="!isExpired(q)"
+                      [class.dark:text-gray-400]="!isExpired(q)">
+                      {{ q.valid_until | date: 'dd/MM/yyyy' }}
+                      @if (isExpired(q)) {
+                        <span class="ml-1 text-xs">⚠</span>
+                      }
+                    </td>
+                    <td class="px-4 py-4 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                        {{ getPeriodicityLabel(deriveQuotePeriodicity(q)) }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap">
+                      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                        [ngClass]="paymentStatusClass(q)">
+                        {{ paymentStatusLabel(q) }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-4 text-sm text-right font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                      {{ (q.total_amount ?? 0) | number: '1.2-2' }} {{ q.currency || '€' }}
+                    </td>
+                    <td class="px-4 py-4 text-right whitespace-nowrap">
+                      <div class="flex items-center justify-end gap-2">
+                        @if (canPay(q)) {
+                          <button
+                            (click)="$event.stopPropagation(); $event.preventDefault(); payQuote(q)"
+                            class="px-3 py-1.5 text-xs font-medium rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 transition-all shadow-sm"
+                          >
+                            Pagar ahora
+                          </button>
                         }
-                      </td>
-                      <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                          {{ getPeriodicityLabel(deriveQuotePeriodicity(q)) }}
-                        </span>
-                      </td>
-                      <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                          [ngClass]="paymentStatusClass(q)">
-                          {{ paymentStatusLabel(q) }}
-                        </span>
-                      </td>
-                      <td class="px-6 py-4 text-sm text-right font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                        {{ (q.total_amount ?? 0) | number: '1.2-2' }} {{ q.currency || '€' }}
-                      </td>
-                      <td class="px-6 py-4 text-right whitespace-nowrap">
-                        <div class="flex items-center justify-end gap-2">
-                          @if (canPay(q)) {
-                            <button
-                              (click)="$event.stopPropagation(); payQuote(q)"
-                              class="px-3 py-1.5 text-xs font-medium rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 transition-all shadow-sm"
-                            >
-                              Pagar ahora
-                            </button>
-                          }
-                          <a
-                            [routerLink]="['/portal/presupuestos', q.id]"
-                            class="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium"
-                          >Ver</a>
-                        </div>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
+                        <span
+                          class="text-blue-600 dark:text-blue-400 text-sm font-medium pointer-events-none"
+                        >{{ 'portal.quotes.view' | transloco }}</span>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
           </div>
 
           <!-- Mobile card view -->
@@ -262,7 +261,7 @@ import { environment } from "../../../../../environments/environment";
                 </div>
 
                 <div class="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800">
-                  <span class="text-sm text-blue-600 dark:text-blue-400 font-medium">Ver detalle →</span>
+                  <span class="text-sm text-blue-600 dark:text-blue-400 font-medium">{{ 'portal.quotes.viewDetail' | transloco }} →</span>
                   @if (canPay(q)) {
                     <button
                       (click)="$event.preventDefault(); $event.stopPropagation(); payQuote(q)"
@@ -279,29 +278,6 @@ import { environment } from "../../../../../environments/environment";
       </div>
     </div>
 
-    <!-- DEBUG pill: server-side BFF context. Helps verify in the UI that
-         the right client_id / company_id is being used and the right DB
-         (crm vs portal mirror) is queried. GATED behind
-         environment.production === false so end users never see internal
-         context. In production the pill is not rendered at all. -->
-    @if (!environment.production) {
-      <div
-        class="fixed bottom-3 right-3 z-50 max-w-[260px] pointer-events-none"
-        data-testid="quotes-debug-pill"
-      >
-        <div class="bg-amber-50 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-lg shadow-lg px-3 py-2 text-[11px] font-mono leading-tight text-amber-900 dark:text-amber-200">
-          <div class="font-semibold mb-1 text-amber-700 dark:text-amber-300">DEBUG · quotes BFF</div>
-          @if (debug(); as d) {
-            <div>client: <span class="font-semibold">{{ d.client_id ? (d.client_id | slice:0:8) + '…' : '—' }}</span></div>
-            <div>company: <span class="font-semibold">{{ d.company_id ? (d.company_id | slice:0:8) + '…' : '—' }}</span></div>
-            <div>count: <span class="font-semibold">{{ d.count ?? '?' }}</span></div>
-            <div>source: <span class="font-semibold">{{ d.source || '?' }}</span></div>
-          } @else {
-            <div class="text-red-600 dark:text-red-400">no _debug in response</div>
-          }
-        </div>
-      </div>
-    }
   `,
 })
 export class PortalQuotesComponent implements OnInit, OnDestroy {
@@ -310,18 +286,9 @@ export class PortalQuotesComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private toast = inject(ToastService);
 
-  /** Exposed to the template so the DEBUG pill can be gated behind
-   *  `environment.production === false` (see commit for portal-quotes
-   *  component). Imported as a static so tree-shaking still removes the
-   *  pill markup from production bundles (Angular AOT evaluates the @if
-   *  guard at runtime against this constant). */
-  protected readonly environment = environment;
-
   quotes = signal<ClientPortalQuote[]>([]);
   loading = signal<boolean>(true);
   error = signal<string | null>(null);
-  /** Server-side debug payload (client_id / company_id / count / source) */
-  debug = signal<{ client_id?: string; company_id?: string; count?: number; source?: string } | null>(null);
 
   searchTerm = signal<string>("");
   statusFilter = signal<string>("");
@@ -399,13 +366,11 @@ export class PortalQuotesComponent implements OnInit, OnDestroy {
   async reload() {
     this.loading.set(true);
     this.error.set(null);
-    const { data, error, debug } = await this.svc.listQuotes();
+    const { data, error } = await this.svc.listQuotes();
     if (error) {
       this.error.set(error.message || "Error al cargar presupuestos");
-      this.debug.set(null);
     } else {
       this.quotes.set(data || []);
-      this.debug.set(debug || null);
     }
     this.loading.set(false);
   }

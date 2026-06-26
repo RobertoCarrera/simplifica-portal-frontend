@@ -30,6 +30,19 @@
       "devices": "Dispositius",
       "settings": "Configuració",
       "logout": "Tancar sessió"
+    },
+    "quotes": {
+      "view": "Veure",
+      "viewDetail": "Veure detall"
+    },
+    "quoteDetail": {
+      "title": "Detall del pressupost",
+      "items": "Desglossament",
+      "acceptedOn": "el",
+      "alreadyAccepted": "Pressupost acceptat",
+      "serviceDescription": "Descripció del servei",
+      "client": "Client",
+      "issuer": "Emissor"
     }
   },
   "cookie": {

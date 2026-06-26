@@ -30,6 +30,19 @@
       "devices": "Dispositivos",
       "settings": "Configuración",
       "logout": "Cerrar sesión"
+    },
+    "quotes": {
+      "view": "Ver",
+      "viewDetail": "Ver detalle"
+    },
+    "quoteDetail": {
+      "title": "Detalle del presupuesto",
+      "items": "Desglose",
+      "acceptedOn": "el",
+      "alreadyAccepted": "Presupuesto aceptado",
+      "serviceDescription": "Descripción del servicio",
+      "client": "Cliente",
+      "issuer": "Emisor"
     }
   },
   "cookie": {

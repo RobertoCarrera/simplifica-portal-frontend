@@ -1,0 +1,64 @@
+{
+  "nav": {
+    "inicio": "Startseite",
+    "notificaciones": "Benachrichtigungen",
+    "tickets": "Tickets",
+    "presupuestos": "Angebote",
+    "facturas": "Rechnungen",
+    "servicios": "Dienste",
+    "dispositivos": "Geräte",
+    "proyectos": "Projekte",
+    "chat": "Chat",
+    "reservas": "Reservierungen",
+    "configuracion": "Einstellungen"
+  },
+  "sidebar": {
+    "expandir": "Erweitern",
+    "colapsar": "Einklappen",
+    "cerrarSesion": "Abmelden",
+    "cambiarEmpresa": "Unternehmen wechseln",
+    "cambiando": "Wechsle...",
+    "sinEmpresas": "Keine Unternehmen verfügbar"
+  },
+  "portal": {
+    "menu": {
+      "dashboard": "Dashboard",
+      "appointments": "Termine",
+      "quotes": "Angebote",
+      "invoices": "Rechnungen",
+      "services": "Dienste",
+      "devices": "Geräte",
+      "settings": "Einstellungen",
+      "logout": "Abmelden"
+    },
+    "quotes": {
+      "view": "Ansehen",
+      "viewDetail": "Details ansehen"
+    },
+    "quoteDetail": {
+      "title": "Angebotsdetails",
+      "items": "Aufschlüsselung",
+      "acceptedOn": "am",
+      "alreadyAccepted": "Angebot angenommen",
+      "serviceDescription": "Leistungsbeschreibung",
+      "client": "Kunde",
+      "issuer": "Aussteller"
+    }
+  },
+  "cookie": {
+    "title": "Wir verwenden Cookies",
+    "description": "Einige Cookies sind für den Betrieb der Seite notwendig. Andere sind optional und helfen uns, die Seite zu verbessern.",
+    "acceptAll": "Alle akzeptieren",
+    "configure": "Konfigurieren",
+    "save": "Speichern",
+    "essential": "Notwendig",
+    "essentialDesc": "Für den Betrieb erforderlich",
+    "analytics": "Analyse",
+    "analyticsDesc": "Helfen uns zu verstehen, wie du die Seite nutzt",
+    "marketing": "Marketing",
+    "marketingDesc": "Um dir relevante Anzeigen zu zeigen"
+  },
+  "shared": {
+    "usuario": "Benutzer"
+  }
+}

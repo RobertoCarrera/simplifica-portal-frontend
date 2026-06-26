@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal, computed } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterModule } from "@angular/router";
+import { TranslocoModule } from "@jsverse/transloco";
 import { ClientPortalService } from "../../../../core/services/client-portal.service";
 import {
   deriveQuotePaymentStatus,
@@ -9,14 +10,16 @@ import {
   getPeriodicityLabel,
 } from "../../../../core/services/client-portal.service";
 import { ToastService } from "../../../../shared/services/toast.service";
+import { PortalAuthService } from "../../../../core/services/portal-auth.service";
+import { PortalClientUser } from "../../../../core/ports/iportal-auth";
 
 @Component({
   selector: "app-portal-quote-detail",
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule],
+  imports: [CommonModule, RouterModule, FormsModule, TranslocoModule],
   template: `
     <div class="h-full bg-gray-50 dark:bg-gray-950 p-4 sm:p-6 lg:p-8">
-      <div class="max-w-5xl mx-auto">
+      <div class="w-full">
         <!-- Back link -->
         <a
           routerLink="/portal/presupuestos"
@@ -70,7 +73,19 @@ import { ToastService } from "../../../../shared/services/toast.service";
           </div>
 
           <!-- Payment Status Banner -->
-          @if (paymentStatus() === 'pagado') {
+          @if (isAcceptedOrInvoiced()) {
+            <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center gap-3">
+              <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span class="text-blue-700 dark:text-blue-300 font-medium">
+                {{ 'portal.quoteDetail.alreadyAccepted' | transloco }}
+                @if (q.accepted_at) {
+                  {{ 'portal.quoteDetail.acceptedOn' | transloco }} {{ q.accepted_at | date: 'dd/MM/yyyy' }}
+                }
+              </span>
+            </div>
+          } @else if (paymentStatus() === 'pagado') {
             <div class="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center gap-3">
               <svg class="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -78,7 +93,7 @@ import { ToastService } from "../../../../shared/services/toast.service";
               <span class="text-green-700 dark:text-green-300 font-medium">Este presupuesto está pagado</span>
             </div>
           }
-          @if (paymentStatus() === 'pendiente') {
+          @if (!isAcceptedOrInvoiced() && paymentStatus() === 'pendiente') {
             <div class="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center justify-between gap-3 flex-wrap">
               <div class="flex items-center gap-3">
                 <svg class="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -146,10 +161,51 @@ import { ToastService } from "../../../../shared/services/toast.service";
             </div>
           </div>
 
+          <!-- Service description (only if the BFF returns one) -->
+          @if (q.description) {
+            <div class="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-6 mb-6">
+              <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                {{ 'portal.quoteDetail.serviceDescription' | transloco }}
+              </h2>
+              <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{{ q.description }}</p>
+            </div>
+          }
+
+          <!-- Client / Issuer info (always rendered, populated from auth + BFF) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <!-- Client -->
+            <div class="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-5">
+              <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                {{ 'portal.quoteDetail.client' | transloco }}
+              </div>
+              @if (clientName() || clientEmail()) {
+                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {{ clientName() || '—' }}
+                </div>
+                @if (clientEmail()) {
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ clientEmail() }}</div>
+                }
+              } @else {
+                <div class="text-sm text-gray-400 dark:text-gray-500">—</div>
+              }
+            </div>
+            <!-- Issuer / Company -->
+            <div class="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-5">
+              <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                {{ 'portal.quoteDetail.issuer' | transloco }}
+              </div>
+              <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {{ issuerName() || '—' }}
+              </div>
+            </div>
+          </div>
+
           <!-- Items breakdown -->
           <div class="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden mb-6">
             <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Desglose</h2>
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {{ 'portal.quoteDetail.items' | transloco }}
+              </h2>
             </div>
             <div class="overflow-x-auto">
               <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
@@ -318,6 +374,7 @@ import { ToastService } from "../../../../shared/services/toast.service";
 })
 export class PortalQuoteDetailComponent implements OnInit {
   private svc = inject(ClientPortalService);
+  private auth = inject(PortalAuthService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private toast = inject(ToastService);
@@ -329,6 +386,12 @@ export class PortalQuoteDetailComponent implements OnInit {
   confirmAction = signal<"accept" | "reject" | null>(null);
   rejectionReason: string = "";
 
+  // Company list (emisor data) — populated from BFF /companies
+  companies = signal<Array<{ id: string; name: string; isActive: boolean }>>([]);
+
+  // Portal client (snapshot taken at init for header rendering)
+  portalClient = signal<PortalClientUser | null>(null);
+
   // Re-export helpers for template
   getPeriodicityLabel = getPeriodicityLabel;
 
@@ -337,6 +400,32 @@ export class PortalQuoteDetailComponent implements OnInit {
     const q = this.quote();
     if (!q) return 'pendiente';
     return deriveQuotePaymentStatus(q);
+  });
+
+  /** True when the quote was accepted or invoiced (terminal client-side states) */
+  isAcceptedOrInvoiced = computed(() => {
+    const s = this.quote()?.status;
+    return s === 'accepted' || s === 'invoiced';
+  });
+
+  /** Client full name from portal auth context */
+  clientName = computed(() => {
+    const pu = this.portalClient();
+    if (!pu) return null;
+    if (pu.full_name) return pu.full_name;
+    const parts = [pu.name, pu.surname].filter(Boolean);
+    return parts.length ? parts.join(' ') : null;
+  });
+
+  /** Client email from portal auth context */
+  clientEmail = computed(() => {
+    return this.portalClient()?.email ?? null;
+  });
+
+  /** Issuer / company name (the active company from the BFF companies endpoint) */
+  issuerName = computed(() => {
+    const active = this.companies().find((c) => c.isActive);
+    return active?.name ?? this.portalClient()?.company_name ?? null;
   });
 
   /** Periodicity from items */
@@ -394,11 +483,29 @@ export class PortalQuoteDetailComponent implements OnInit {
 
   async ngOnInit() {
     const id = this.route.snapshot.paramMap.get("id") as string;
-    const { data, error } = await this.svc.getQuote(id);
-    if (error) {
-      console.error("Error loading quote:", error);
+
+    // Snapshot the current portal client (public API — the private
+    // portalUserSubject on PortalAuthService is not accessible from here).
+    this.portalClient.set(await this.auth.getCurrentClient());
+
+    // The BFF currently exposes /quotes (list) but no /quotes/:id endpoint, so we
+    // fetch the list and find the row client-side. When the BFF gains a detail
+    // endpoint, swap this for svc.getQuote(id) — the template already accepts
+    // either shape (it reads from q.items, q.title, etc.).
+    const [{ data: list }, companies] = await Promise.all([
+      this.svc.listQuotes(),
+      this.svc.getCompanies(),
+    ]);
+
+    this.companies.set(companies || []);
+
+    const found = (list || []).find((x: any) => x.id === id);
+    if (found) {
+      this.quote.set(found);
+    } else if (!list) {
+      console.error("[portal-quote-detail] listQuotes returned no data");
     } else {
-      this.quote.set(data);
+      console.warn(`[portal-quote-detail] quote ${id} not found in client's list`);
     }
     this.loading.set(false);
   }
@@ -409,7 +516,8 @@ export class PortalQuoteDetailComponent implements OnInit {
 
   canRespond(): boolean {
     const s = this.quote()?.status;
-    return ["sent", "viewed", "pending"].includes(s || "");
+    // Only show accept/reject when the quote is awaiting client action.
+    return s === "sent" || s === "viewed";
   }
 
   payNow() {
