@@ -5,4 +5,7 @@ export const environment = {
   },
   edgeFunctionsBaseUrl: 'https://lsntpezzhinnohggezxy.supabase.co/functions/v1',
   environment: 'development',
+  /** false in dev / preview, true in production builds. Use as a runtime
+   *  gate for debug-only UI (e.g. the BFF debug pill in portal quotes). */
+  production: false,
 };

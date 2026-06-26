@@ -12,6 +12,7 @@ import {
 } from "../../../../core/services/client-portal.service";
 import { ToastService } from "../../../../shared/services/toast.service";
 import { RealtimeChannel } from "@supabase/supabase-js";
+import { environment } from "../../../../../environments/environment";
 
 @Component({
   selector: "app-portal-quotes",
@@ -280,23 +281,27 @@ import { RealtimeChannel } from "@supabase/supabase-js";
 
     <!-- DEBUG pill: server-side BFF context. Helps verify in the UI that
          the right client_id / company_id is being used and the right DB
-         (crm vs portal mirror) is queried. Remove once the bug is fixed. -->
-    <div
-      class="fixed bottom-3 right-3 z-50 max-w-[260px] pointer-events-none"
-      data-testid="quotes-debug-pill"
-    >
-      <div class="bg-amber-50 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-lg shadow-lg px-3 py-2 text-[11px] font-mono leading-tight text-amber-900 dark:text-amber-200">
-        <div class="font-semibold mb-1 text-amber-700 dark:text-amber-300">DEBUG · quotes BFF</div>
-        @if (debug(); as d) {
-          <div>client: <span class="font-semibold">{{ d.client_id ? (d.client_id | slice:0:8) + '…' : '—' }}</span></div>
-          <div>company: <span class="font-semibold">{{ d.company_id ? (d.company_id | slice:0:8) + '…' : '—' }}</span></div>
-          <div>count: <span class="font-semibold">{{ d.count ?? '?' }}</span></div>
-          <div>source: <span class="font-semibold">{{ d.source || '?' }}</span></div>
-        } @else {
-          <div class="text-red-600 dark:text-red-400">no _debug in response</div>
-        }
+         (crm vs portal mirror) is queried. GATED behind
+         environment.production === false so end users never see internal
+         context. In production the pill is not rendered at all. -->
+    @if (!environment.production) {
+      <div
+        class="fixed bottom-3 right-3 z-50 max-w-[260px] pointer-events-none"
+        data-testid="quotes-debug-pill"
+      >
+        <div class="bg-amber-50 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-lg shadow-lg px-3 py-2 text-[11px] font-mono leading-tight text-amber-900 dark:text-amber-200">
+          <div class="font-semibold mb-1 text-amber-700 dark:text-amber-300">DEBUG · quotes BFF</div>
+          @if (debug(); as d) {
+            <div>client: <span class="font-semibold">{{ d.client_id ? (d.client_id | slice:0:8) + '…' : '—' }}</span></div>
+            <div>company: <span class="font-semibold">{{ d.company_id ? (d.company_id | slice:0:8) + '…' : '—' }}</span></div>
+            <div>count: <span class="font-semibold">{{ d.count ?? '?' }}</span></div>
+            <div>source: <span class="font-semibold">{{ d.source || '?' }}</span></div>
+          } @else {
+            <div class="text-red-600 dark:text-red-400">no _debug in response</div>
+          }
+        </div>
       </div>
-    </div>
+    }
   `,
 })
 export class PortalQuotesComponent implements OnInit, OnDestroy {
@@ -304,6 +309,13 @@ export class PortalQuotesComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private toast = inject(ToastService);
+
+  /** Exposed to the template so the DEBUG pill can be gated behind
+   *  `environment.production === false` (see commit for portal-quotes
+   *  component). Imported as a static so tree-shaking still removes the
+   *  pill markup from production bundles (Angular AOT evaluates the @if
+   *  guard at runtime against this constant). */
+  protected readonly environment = environment;
 
   quotes = signal<ClientPortalQuote[]>([]);
   loading = signal<boolean>(true);
