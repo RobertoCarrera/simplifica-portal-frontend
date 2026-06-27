@@ -50,6 +50,19 @@
       "taxBase": "Steuerbasis",
       "taxAmount": "MwSt.",
       "total": "Gesamt"
+    },
+    "quoteStatus": {
+      "draft": "Entwurf",
+      "sent": "Antwort ausstehend",
+      "viewed": "Gesehen",
+      "accepted": "Angenommen",
+      "invoiced": "Berechnet",
+      "rejected": "Abgelehnt",
+      "expired": "Abgelaufen",
+      "cancelled": "Storniert",
+      "pendingResponse": "Dieses Angebot wartet auf deine Annahme. Nimm es unten an oder lehne es ab.",
+      "acceptedMessage": "Du hast dieses Angebot angenommen. Es wurde eine Rechnung erstellt.",
+      "viewInvoice": "Rechnung ansehen"
     }
   },
   "cookie": {

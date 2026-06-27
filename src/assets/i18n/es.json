@@ -50,6 +50,19 @@
       "taxBase": "Base imponible",
       "taxAmount": "IVA",
       "total": "Total"
+    },
+    "quoteStatus": {
+      "draft": "Borrador",
+      "sent": "Pendiente de respuesta",
+      "viewed": "Visto",
+      "accepted": "Aceptado",
+      "invoiced": "Facturado",
+      "rejected": "Rechazado",
+      "expired": "Vencido",
+      "cancelled": "Cancelado",
+      "pendingResponse": "Tienes este presupuesto pendiente de aceptar. Acepta o rechaza abajo.",
+      "acceptedMessage": "Has aceptado este presupuesto. Se ha generado una factura.",
+      "viewInvoice": "Ver factura"
     }
   },
   "cookie": {

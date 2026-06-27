@@ -50,6 +50,19 @@
       "taxBase": "Base imposable",
       "taxAmount": "IVA",
       "total": "Total"
+    },
+    "quoteStatus": {
+      "draft": "Esborrany",
+      "sent": "Pendent de resposta",
+      "viewed": "Vist",
+      "accepted": "Acceptat",
+      "invoiced": "Facturat",
+      "rejected": "Rebutjat",
+      "expired": "Caducat",
+      "cancelled": "Cancel·lat",
+      "pendingResponse": "Tens aquest pressupost pendent d'acceptar. Accepta o rebutja a baix.",
+      "acceptedMessage": "Has acceptat aquest pressupost. S'ha generat una factura.",
+      "viewInvoice": "Veure factura"
     }
   },
   "cookie": {

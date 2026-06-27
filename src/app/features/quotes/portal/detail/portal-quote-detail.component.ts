@@ -2,10 +2,9 @@ import { Component, OnInit, inject, signal, computed } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterModule } from "@angular/router";
-import { TranslocoModule } from "@jsverse/transloco";
+import { TranslocoModule, TranslocoService } from "@jsverse/transloco";
 import { ClientPortalService } from "../../../../core/services/client-portal.service";
 import {
-  deriveQuotePaymentStatus,
   deriveQuotePeriodicity,
   getPeriodicityLabel,
 } from "../../../../core/services/client-portal.service";
@@ -71,34 +70,65 @@ import { PortalClientUser } from "../../../../core/ports/iportal-auth";
             </button>
           </div>
 
-          <!-- Payment Status Banner -->
-          @if (isAcceptedOrInvoiced()) {
-            <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center gap-3">
-              <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span class="text-blue-700 dark:text-blue-300 font-medium">
-                {{ 'portal.quoteDetail.alreadyAccepted' | transloco }}
-                @if (q.accepted_at) {
-                  {{ 'portal.quoteDetail.acceptedOn' | transloco }} {{ q.accepted_at | date: 'dd/MM/yyyy' }}
-                }
-              </span>
-            </div>
-          } @else if (paymentStatus() === 'pagado') {
-            <div class="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center gap-3">
-              <svg class="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span class="text-green-700 dark:text-green-300 font-medium">Este presupuesto está pagado</span>
-            </div>
-          }
-          @if (paymentStatus() === 'vencido') {
-            <div class="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-3">
-              <svg class="w-5 h-5 text-red-600 dark:text-red-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span class="text-red-700 dark:text-red-300 font-medium">Este presupuesto ha vencido</span>
-            </div>
+          <!-- Quote State Banner -->
+          <!-- Quotes are NOT payment documents, so we surface business state
+               (sent / viewed / accepted / invoiced) instead of payment status. -->
+          @switch (q.status) {
+            @case ('sent') {
+              <div class="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center gap-3">
+                <svg class="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="text-amber-700 dark:text-amber-300 font-medium">
+                  {{ 'portal.quoteStatus.pendingResponse' | transloco }}
+                </span>
+              </div>
+            }
+            @case ('viewed') {
+              <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center gap-3">
+                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span class="text-blue-700 dark:text-blue-300 font-medium">
+                  {{ 'portal.quoteStatus.pendingResponse' | transloco }}
+                </span>
+              </div>
+            }
+            @case ('accepted') {
+              <div class="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-start gap-3">
+                <svg class="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div class="flex-1 text-green-700 dark:text-green-300 font-medium">
+                  <span>{{ 'portal.quoteStatus.acceptedMessage' | transloco }}</span>
+                  @if (canViewInvoice()) {
+                    <a [routerLink]="['/facturas', q.invoice_id]"
+                       class="ml-2 inline-flex items-center gap-1 underline hover:no-underline font-semibold">
+                      {{ 'portal.quoteStatus.viewInvoice' | transloco }}
+                      <span aria-hidden="true">→</span>
+                    </a>
+                  }
+                </div>
+              </div>
+            }
+            @case ('invoiced') {
+              <div class="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-start gap-3">
+                <svg class="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div class="flex-1 text-green-700 dark:text-green-300 font-medium">
+                  <span>{{ 'portal.quoteStatus.acceptedMessage' | transloco }}</span>
+                  @if (canViewInvoice()) {
+                    <a [routerLink]="['/facturas', q.invoice_id]"
+                       class="ml-2 inline-flex items-center gap-1 underline hover:no-underline font-semibold">
+                      {{ 'portal.quoteStatus.viewInvoice' | transloco }}
+                      <span aria-hidden="true">→</span>
+                    </a>
+                  }
+                </div>
+              </div>
+            }
           }
 
           <!-- Summary cards -->
@@ -107,8 +137,8 @@ import { PortalClientUser } from "../../../../core/ports/iportal-auth";
             <div class="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-5">
               <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Estado</div>
               <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
-                [ngClass]="paymentStatusBadgeClass()">
-                {{ paymentStatusLabel() }}
+                [ngClass]="quoteStateBadgeClass()">
+                {{ quoteStateLabel() }}
               </span>
             </div>
             <!-- Date -->
@@ -346,8 +376,15 @@ import { PortalClientUser } from "../../../../core/ports/iportal-auth";
                 >
                    ✓ Aceptar presupuesto
                  </button>
-               }
-             </div>
+                }
+                @if (canViewInvoice()) {
+                  <a [routerLink]="['/facturas', q.invoice_id]"
+                     class="px-6 py-3 rounded-lg font-medium text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors inline-flex items-center gap-2">
+                    {{ 'portal.quoteStatus.viewInvoice' | transloco }}
+                    <span aria-hidden="true">→</span>
+                  </a>
+                }
+              </div>
           </div>
         }
       </div>
@@ -407,6 +444,7 @@ export class PortalQuoteDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private toast = inject(ToastService);
+  private transloco = inject(TranslocoService);
 
   quote = signal<any | null>(null);
   loading = signal<boolean>(true);
@@ -424,17 +462,11 @@ export class PortalQuoteDetailComponent implements OnInit {
   // Re-export helpers for template
   getPeriodicityLabel = getPeriodicityLabel;
 
-  /** Payment-oriented status */
-  paymentStatus = computed(() => {
-    const q = this.quote();
-    if (!q) return 'pendiente';
-    return deriveQuotePaymentStatus(q);
-  });
-
-  /** True when the quote was accepted or invoiced (terminal client-side states) */
-  isAcceptedOrInvoiced = computed(() => {
-    const s = this.quote()?.status;
-    return s === 'accepted' || s === 'invoiced';
+  /** Quote lifecycle state (raw status from BFF) — null until quote loads.
+   *  Quotes are NOT payment documents, so we surface the business state
+   *  (sent, viewed, accepted, invoiced, etc.) rather than a payment status. */
+  quoteState = computed(() => {
+    return this.quote()?.status ?? null;
   });
 
   /** Client full name from portal auth context */
@@ -602,35 +634,58 @@ export class PortalQuoteDetailComponent implements OnInit {
     return s === "sent" || s === "viewed";
   }
 
-  payNow() {
+  /** Show "Ver factura" when the quote has produced an invoice that the
+   *  portal client can open. The invoice_id is filled by the BFF once the
+   *  quote is accepted (and the auto-invoice trigger has fired). */
+  canViewInvoice(): boolean {
     const q = this.quote();
-    if (!q) return;
-    const paymentUrl = q.payment_url || q.stripe_payment_url || q.paypal_payment_url;
-    if (paymentUrl) {
-      window.open(paymentUrl, '_blank');
-    } else {
-      this.toast.info("Información", "Las opciones de pago estarán disponibles próximamente.");
-    }
+    if (!q) return false;
+    const s = q.status;
+    return (s === "accepted" || s === "invoiced") && !!q.invoice_id;
   }
 
-  paymentStatusLabel(): string {
-    const ps = this.paymentStatus();
-    const labels: Record<string, string> = {
-      pendiente: 'Pendiente de pago',
-      pagado: 'Pagado',
-      vencido: 'Vencido',
-    };
-    return labels[ps] || ps;
+  /** Localized label for the quote lifecycle state shown in the status pill. */
+  quoteStateLabel(): string {
+    const status = this.quoteState();
+    if (!status) return "—";
+    const key = `portal.quoteStatus.${status}`;
+    const translated = this.transloco.translate(key);
+    // If the key is missing, Transloco returns the key itself — fall back
+    // to the raw status so the UI never shows the dotted path.
+    return translated && translated !== key ? translated : status;
   }
 
-  paymentStatusBadgeClass(): string {
-    const ps = this.paymentStatus();
+  /** Semantic colour for the status pill, driven by the quote lifecycle state. */
+  quoteStateBadgeClass(): string {
+    const status = this.quoteState();
     const map: Record<string, string> = {
-      pendiente: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-      pagado: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-      vencido: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+      // Draft = internal-only; client should rarely see it, but render it
+      // muted if the BFF ever leaks it.
+      draft:
+        "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
+      // Sent = awaiting client response.
+      sent:
+        "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+      // Viewed = client opened it but hasn't decided.
+      viewed:
+        "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+      // Accepted = positive terminal state.
+      accepted:
+        "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+      // Invoiced = the quote was turned into a bill; same positive tone.
+      invoiced:
+        "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+      // Rejected = client declined.
+      rejected:
+        "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+      // Expired = past valid_until without a response.
+      expired:
+        "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+      // Cancelled = neutral terminal state.
+      cancelled:
+        "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
     };
-    return map[ps] || 'bg-gray-100 text-gray-800';
+    return map[status || ""] || "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
   }
 
   // ---- Accept / Reject flow (preserved from original) ----
