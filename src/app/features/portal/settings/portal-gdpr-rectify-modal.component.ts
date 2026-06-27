@@ -383,11 +383,19 @@ export class PortalGdprRectifyModalComponent {
 
     this.submitting = true;
     try {
+      // Call the 4-param overload explicitly (not the 2-param one) so
+      // PostgREST unambiguously matches the signature and so we pass
+      // IP + user agent for GDPR Art. 7.1 evidence.
       const { data, error } = await this.auth.client.rpc(
         'portal_submit_arco_request',
         {
           p_request_type: 'rectification',
           p_details: { description },
+          p_ip_address: null,
+          p_user_agent:
+            typeof navigator !== 'undefined' && navigator.userAgent
+              ? navigator.userAgent
+              : null,
         },
       );
 
