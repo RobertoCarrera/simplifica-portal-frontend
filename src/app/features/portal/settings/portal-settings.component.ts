@@ -1,13 +1,14 @@
-import { Component, OnInit, inject } from "@angular/core";
+import { Component, OnInit, ViewChild, inject } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
 import { PortalAuthService } from "../../../core/services/portal-auth.service";
+import { PortalGdprRectifyModalComponent } from "./portal-gdpr-rectify-modal.component";
 
 @Component({
   selector: "app-portal-settings",
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, PortalGdprRectifyModalComponent],
   template: `
     <div class="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900">
       <div class="max-w-7xl mx-auto p-6 md:p-10 space-y-8">
@@ -164,6 +165,11 @@ import { PortalAuthService } from "../../../core/services/portal-auth.service";
                 <i class="fas fa-edit"></i>
                 <span>Solicitar corrección</span>
               </button>
+              @if (rectifySuccessFlash) {
+                <p class="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
+                  <i class="fas fa-check-circle mr-1"></i>Solicitud registrada. Te responderemos a la brevedad.
+                </p>
+              }
             </article>
 
             <!-- Solicitar borrado de mi cuenta (Art. 17) -->
@@ -192,77 +198,10 @@ import { PortalAuthService } from "../../../core/services/portal-auth.service";
         </section>
       </div>
 
-      <!-- Modal: Rectificación (Art. 16) -->
-      @if (showRectifyModal) {
-        <div
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          (click)="closeRectifyModal()"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-lg w-full p-6"
-            (click)="$event.stopPropagation()"
-          >
-            <div class="flex items-center gap-2 mb-4">
-              <i class="fas fa-edit text-primary-500 text-xl"></i>
-              <h3 class="text-lg font-bold text-gray-900 dark:text-white">
-                Solicitar corrección de datos
-              </h3>
-            </div>
-            <p class="text-sm text-gray-600 dark:text-gray-300 mb-3">
-              Describí qué datos querés corregir y, si podés, indicá el valor
-              correcto. Revisaremos tu solicitud y te responderemos.
-            </p>
-            <label
-              for="rectify-description"
-              class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >
-              Descripción
-            </label>
-            <textarea
-              id="rectify-description"
-              name="rectify-description"
-              rows="5"
-              [(ngModel)]="rectifyDescription"
-              [disabled]="sendingRectify"
-              placeholder="Ej: Mi número de teléfono actual es +34 600 000 000, no el que figura en mi ficha."
-              class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
-            ></textarea>
-            @if (rectifyStatus === 'error') {
-              <p class="mt-2 text-sm text-red-600 dark:text-red-400">
-                <i class="fas fa-exclamation-circle mr-1"></i>{{ rectifyStatusMsg }}
-              </p>
-            }
-            @if (rectifyStatus === 'success') {
-              <p class="mt-2 text-sm text-emerald-600 dark:text-emerald-400">
-                <i class="fas fa-check-circle mr-1"></i>{{ rectifyStatusMsg }}
-              </p>
-            }
-            <div class="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                (click)="closeRectifyModal()"
-                [disabled]="sendingRectify"
-                class="px-4 py-2 text-sm font-medium rounded-md bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                (click)="sendRectifyRequest()"
-                [disabled]="sendingRectify || !rectifyDescription.trim()"
-                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                @if (sendingRectify) {
-                  <i class="fas fa-spinner fa-spin"></i>
-                }
-                <span>{{ sendingRectify ? 'Enviando…' : 'Enviar solicitud' }}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      }
+      <!-- Modal: Rectificación (Art. 16) — extracted to PortalGdprRectifyModalComponent -->
+      <app-portal-gdpr-rectify-modal
+        (requestCreated)="onRectifyRequestCreated()"
+      ></app-portal-gdpr-rectify-modal>
 
       <!-- Modal: Borrado (Art. 17) -->
       @if (showEraseModal) {
@@ -349,6 +288,9 @@ import { PortalAuthService } from "../../../core/services/portal-auth.service";
 export class PortalSettingsComponent implements OnInit {
   private auth = inject(PortalAuthService);
 
+  @ViewChild(PortalGdprRectifyModalComponent)
+  rectifyModal!: PortalGdprRectifyModalComponent;
+
   user: any = null;
   isLoading = true;
 
@@ -358,11 +300,8 @@ export class PortalSettingsComponent implements OnInit {
   exportStatusMsg = '';
 
   // ── Rectification (Art. 16) ───────────────────────────────────────
-  showRectifyModal = false;
-  rectifyDescription = '';
-  sendingRectify = false;
-  rectifyStatus: '' | 'success' | 'error' = '';
-  rectifyStatusMsg = '';
+  // State lives in PortalGdprRectifyModalComponent; we just react to the
+  // emitted `requestCreated` event.
 
   // ── Erasure (Art. 17) ─────────────────────────────────────────────
   showEraseModal = false;
@@ -370,6 +309,9 @@ export class PortalSettingsComponent implements OnInit {
   erasing = false;
   eraseStatus: '' | 'success' | 'error' = '';
   eraseStatusMsg = '';
+
+  // Flag shown briefly after a successful rectification — purely UX.
+  rectifySuccessFlash = false;
 
   async ngOnInit() {
     try {
@@ -427,53 +369,24 @@ export class PortalSettingsComponent implements OnInit {
 
   // ── Rectification (Art. 16) ───────────────────────────────────────
   openRectifyModal() {
-    this.showRectifyModal = true;
-    this.rectifyDescription = '';
-    this.rectifyStatus = '';
-    this.rectifyStatusMsg = '';
+    this.rectifySuccessFlash = false;
+    this.rectifyModal.open('personal', {
+      email: this.user?.email,
+      name: this.user?.full_name ?? this.user?.name,
+      phone: this.user?.phone,
+      dni: this.user?.tax_id,
+      address: this.user?.address,
+      web: this.user?.web,
+    });
   }
 
-  closeRectifyModal() {
-    if (this.sendingRectify) return;
-    this.showRectifyModal = false;
-  }
-
-  async sendRectifyRequest() {
-    if (this.sendingRectify) return;
-    const description = this.rectifyDescription.trim();
-    if (!description) {
-      this.rectifyStatus = 'error';
-      this.rectifyStatusMsg = 'Describí qué datos querés corregir.';
-      return;
-    }
-    this.sendingRectify = true;
-    this.rectifyStatus = '';
-    this.rectifyStatusMsg = '';
-    try {
-      const { data, error } = await this.auth.client.rpc('portal_submit_arco_request', {
-        p_request_type: 'rectification',
-        p_details: { description },
-      });
-      if (error) throw error;
-      const result = (data ?? null) as { success?: boolean; error?: string } | null;
-      if (!result?.success) {
-        throw new Error(result?.error ?? 'No se pudo registrar la solicitud.');
-      }
-      this.rectifyStatus = 'success';
-      this.rectifyStatusMsg = 'Tu solicitud fue registrada. Te responderemos a la brevedad.';
-      this.rectifyDescription = '';
-      setTimeout(() => {
-        if (this.showRectifyModal && this.rectifyStatus === 'success') {
-          this.showRectifyModal = false;
-        }
-      }, 1800);
-    } catch (e: any) {
-      console.error('Error sending rectification request:', e);
-      this.rectifyStatus = 'error';
-      this.rectifyStatusMsg = e?.message ?? 'Error al enviar la solicitud.';
-    } finally {
-      this.sendingRectify = false;
-    }
+  onRectifyRequestCreated() {
+    // Modal already showed its own toast; this is just a card-level
+    // confirmation badge so the user sees feedback on the settings page too.
+    this.rectifySuccessFlash = true;
+    setTimeout(() => {
+      this.rectifySuccessFlash = false;
+    }, 4000);
   }
 
   // ── Erasure (Art. 17) ─────────────────────────────────────────────
