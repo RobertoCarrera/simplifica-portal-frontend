@@ -930,6 +930,41 @@ export class ClientPortalService {
   }
 
   /**
+   * Request a quote from the staff. Client fills a notes field, the BFF
+   * creates a `quotes` row with status='request' and the staff gets a
+   * new lead to handle. Returns the new quote or an error message.
+   */
+  async requestServiceQuote(payload: {
+    service_id: string;
+    variant_id?: string | null;
+    notes?: string | null;
+  }): Promise<{ data: ClientPortalQuote | null; error?: any }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-modules/services/quote-request';
+      const res = await fetch(bffUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`quote-request endpoint returned ${res.status}: ${txt.substring(0, 500)}`);
+      }
+      const json = await res.json();
+      return { data: json?.data ?? null };
+    } catch (e: any) {
+      console.error('[ClientPortalService] requestServiceQuote failed:', e?.message);
+      return { data: null, error: { message: e?.message || 'requestServiceQuote failed' } };
+    }
+  }
+
+  /**
    * Initialize a Redsys payment for a contract. Returns the URL
    * Redsys expects the client to POST the form to, and the form
    * fields (Ds_MerchantParameters, Ds_Signature, ...) to be
