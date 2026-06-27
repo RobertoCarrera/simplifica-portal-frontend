@@ -223,7 +223,7 @@ import {
                         <div class="w-full text-center text-xs text-gray-500 dark:text-gray-400 italic py-2">
                           Selecciona una opción arriba para continuar
                         </div>
-                      } @else if (s.allow_direct_contracting && s.is_bookable) {
+                      } @else if (isPortalContractable(s) && isPortalBookable(s)) {
                         <div class="flex gap-2 w-full">
                           <button
                             (click)="openContractModal(s, selectedVariant(s))"
@@ -245,7 +245,7 @@ import {
                             Reservar
                           </button>
                         </div>
-                      } @else if (s.allow_direct_contracting) {
+                      } @else if (isPortalContractable(s)) {
                         <button
                           (click)="openContractModal(s, selectedVariant(s))"
                           [disabled]="contracting() === s.id"
@@ -256,7 +256,7 @@ import {
                           }
                           Contratar
                         </button>
-                      } @else if (s.is_bookable) {
+                      } @else if (isPortalBookable(s)) {
                         <button
                           type="button"
                           disabled
@@ -883,6 +883,25 @@ export class PortalServicesComponent implements OnInit, AfterViewChecked {
     });
   });
 
+  /**
+   * Per-channel effective flag: portal-specific override wins when
+   * explicitly set (not null), otherwise fall back to the agenda flag.
+   * Mirrors the BFF's contractability check so the UI shows the same
+   * CTAs the user would be allowed to actually click.
+   */
+  private effectiveFlag(s: PortalService, agendaFlag: boolean | undefined, portalFlag: boolean | null | undefined): boolean {
+    if (portalFlag != null) return !!portalFlag;
+    return !!agendaFlag;
+  }
+
+  isPortalContractable(s: PortalService): boolean {
+    return this.effectiveFlag(s, s.allow_direct_contracting, s.allow_direct_contracting_in_portal);
+  }
+
+  isPortalBookable(s: PortalService): boolean {
+    return this.effectiveFlag(s, s.is_bookable, s.is_bookable_in_portal);
+  }
+
   async ngOnInit() {
     this.loading.set(true);
     const { data, error } = await this.portal.listServices();
@@ -907,7 +926,7 @@ export class PortalServicesComponent implements OnInit, AfterViewChecked {
   }
 
   openContractModal(s: PortalService, variant?: PortalServiceVariant, pricingPeriod?: 'one-time' | 'monthly' | 'annually' | 'custom') {
-    if (!s.allow_direct_contracting) return;
+    if (!this.isPortalContractable(s)) return;
     this.contractModalService.set(s);
     this.contractModalVariant.set(variant ?? null);
     this.contractModalPricingPeriod.set(pricingPeriod ?? null);
@@ -964,6 +983,11 @@ export class PortalServicesComponent implements OnInit, AfterViewChecked {
     const s = this.contractModalService();
     if (!s) {
       this.errorMessage.set('No hay servicio seleccionado');
+      return;
+    }
+    if (!this.isPortalContractable(s)) {
+      this.errorMessage.set('Este servicio no se puede contratar desde el portal. Solicita un presupuesto.');
+      this.closeContractModal();
       return;
     }
     const method = this.paymentMethod();

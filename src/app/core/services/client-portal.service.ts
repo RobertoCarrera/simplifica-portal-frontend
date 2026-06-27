@@ -125,6 +125,12 @@ export interface PortalService {
   is_public?: boolean;
   is_bookable?: boolean;
   allow_direct_contracting?: boolean;
+  // Per-channel portal overrides. When explicitly set (not null), they
+  // override the agenda-level flags above. When null, the agenda flag
+  // wins (preserves backward-compat with services that haven't been
+  // explicitly toggled in the Portal card).
+  is_bookable_in_portal?: boolean | null;
+  allow_direct_contracting_in_portal?: boolean | null;
   features?: string | null;
   min_quantity?: number | null;
   max_quantity?: number | null;
