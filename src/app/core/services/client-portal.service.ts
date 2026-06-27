@@ -15,6 +15,11 @@ export interface ClientPortalQuote {
   tax_amount?: number;
   irpf_amount?: number;
   items?: any[];
+  // Invoice reference — populated by the BFF once a quote is accepted
+  // (and the auto-invoice trigger has fired). Optional because the
+  // current BFF DTO does not include it; the portal renders the
+  // "Ver factura" link conditionally on this being present.
+  invoice_id?: string | null;
   // Payment-related fields
   payment_status?: 'pending' | 'paid' | null;
   payment_url?: string | null;

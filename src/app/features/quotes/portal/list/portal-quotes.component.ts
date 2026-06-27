@@ -2,12 +2,10 @@ import { Component, OnInit, OnDestroy, inject, signal, computed } from "@angular
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { RouterModule, Router, ActivatedRoute } from "@angular/router";
-import { TranslocoModule } from "@jsverse/transloco";
+import { TranslocoModule, TranslocoService } from "@jsverse/transloco";
 import {
   ClientPortalService,
   ClientPortalQuote,
-  QuotePaymentStatus,
-  deriveQuotePaymentStatus,
   deriveQuotePeriodicity,
   getPeriodicityLabel,
 } from "../../../../core/services/client-portal.service";
@@ -47,16 +45,20 @@ import { RealtimeChannel } from "@supabase/supabase-js";
             </svg>
           </div>
 
-          <!-- Status filter -->
+          <!-- Status filter (quote lifecycle state) -->
           <select
             [ngModel]="statusFilter()"
             (ngModelChange)="statusFilter.set($event)"
             class="px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Todos los estados</option>
-            <option value="pendiente">Pendiente</option>
-            <option value="pagado">Pagado</option>
-            <option value="vencido">Vencido</option>
+            <option value="sent">{{ 'portal.quoteStatus.sent' | transloco }}</option>
+            <option value="viewed">{{ 'portal.quoteStatus.viewed' | transloco }}</option>
+            <option value="accepted">{{ 'portal.quoteStatus.accepted' | transloco }}</option>
+            <option value="invoiced">{{ 'portal.quoteStatus.invoiced' | transloco }}</option>
+            <option value="rejected">{{ 'portal.quoteStatus.rejected' | transloco }}</option>
+            <option value="expired">{{ 'portal.quoteStatus.expired' | transloco }}</option>
+            <option value="cancelled">{{ 'portal.quoteStatus.cancelled' | transloco }}</option>
           </select>
 
           <!-- Periodicity filter -->
@@ -184,8 +186,8 @@ import { RealtimeChannel } from "@supabase/supabase-js";
                     </td>
                     <td class="px-4 py-4 whitespace-nowrap">
                       <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                        [ngClass]="paymentStatusClass(q)">
-                        {{ paymentStatusLabel(q) }}
+                        [ngClass]="quoteStateBadgeClass(q)">
+                        {{ quoteStateLabel(q) }}
                       </span>
                     </td>
                     <td class="px-4 py-4 text-sm text-right font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
@@ -193,13 +195,15 @@ import { RealtimeChannel } from "@supabase/supabase-js";
                     </td>
                     <td class="px-4 py-4 text-right whitespace-nowrap">
                       <div class="flex items-center justify-end gap-2">
-                        @if (canPay(q)) {
-                          <button
-                            (click)="$event.stopPropagation(); $event.preventDefault(); payQuote(q)"
-                            class="px-3 py-1.5 text-xs font-medium rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 transition-all shadow-sm"
+                        @if (canViewInvoice(q)) {
+                          <a
+                            [routerLink]="['/facturas', q.invoice_id]"
+                            (click)="$event.stopPropagation()"
+                            class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm inline-flex items-center gap-1"
                           >
-                            Pagar ahora
-                          </button>
+                            {{ 'portal.quoteStatus.viewInvoice' | transloco }}
+                            <span aria-hidden="true">→</span>
+                          </a>
                         }
                         <span
                           class="text-blue-600 dark:text-blue-400 text-sm font-medium pointer-events-none"
@@ -215,63 +219,71 @@ import { RealtimeChannel } from "@supabase/supabase-js";
           <!-- Mobile card view -->
           <div class="md:hidden space-y-4">
             @for (q of filteredQuotes(); track q.id) {
-              <a
-                [routerLink]="['/portal/quotes', q.id]"
-                class="block bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
+              <div
+                class="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
               >
-                <div class="flex items-start justify-between mb-3">
-                  <div class="flex-1 min-w-0">
-                    <div class="text-sm font-mono text-gray-500 dark:text-gray-400 mb-0.5">
-                      {{ q.full_quote_number || '—' }}
+                <a
+                  [routerLink]="['/portal/quotes', q.id]"
+                  class="block p-4"
+                >
+                  <div class="flex items-start justify-between mb-3">
+                    <div class="flex-1 min-w-0">
+                      <div class="text-sm font-mono text-gray-500 dark:text-gray-400 mb-0.5">
+                        {{ q.full_quote_number || '—' }}
+                      </div>
+                      <div class="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
+                        {{ q.title || 'Sin título' }}
+                      </div>
                     </div>
-                    <div class="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
-                      {{ q.title || 'Sin título' }}
-                    </div>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium shrink-0 ml-2"
+                      [ngClass]="quoteStateBadgeClass(q)">
+                      {{ quoteStateLabel(q) }}
+                    </span>
                   </div>
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium shrink-0 ml-2"
-                    [ngClass]="paymentStatusClass(q)">
-                    {{ paymentStatusLabel(q) }}
-                  </span>
-                </div>
 
-                <div class="grid grid-cols-2 gap-2 text-sm mb-3">
-                  <div>
-                    <span class="text-gray-400 dark:text-gray-500 text-xs">Fecha</span>
-                    <div class="text-gray-700 dark:text-gray-300">{{ q.quote_date | date: 'dd/MM/yyyy' }}</div>
-                  </div>
-                  <div>
-                    <span class="text-gray-400 dark:text-gray-500 text-xs"
-                      [class.text-red-500]="isExpired(q)">Vencimiento</span>
-                    <div class="text-gray-700 dark:text-gray-300"
-                      [class.text-red-600]="isExpired(q)"
-                      [class.dark:text-red-400]="isExpired(q)">
-                      {{ q.valid_until | date: 'dd/MM/yyyy' }}
+                  <div class="grid grid-cols-2 gap-2 text-sm mb-3">
+                    <div>
+                      <span class="text-gray-400 dark:text-gray-500 text-xs">Fecha</span>
+                      <div class="text-gray-700 dark:text-gray-300">{{ q.quote_date | date: 'dd/MM/yyyy' }}</div>
+                    </div>
+                    <div>
+                      <span class="text-gray-400 dark:text-gray-500 text-xs"
+                        [class.text-red-500]="isExpired(q)">Vencimiento</span>
+                      <div class="text-gray-700 dark:text-gray-300"
+                        [class.text-red-600]="isExpired(q)"
+                        [class.dark:text-red-400]="isExpired(q)">
+                        {{ q.valid_until | date: 'dd/MM/yyyy' }}
+                      </div>
+                    </div>
+                    <div>
+                      <span class="text-gray-400 dark:text-gray-500 text-xs">Periodicidad</span>
+                      <div class="text-gray-700 dark:text-gray-300">{{ getPeriodicityLabel(deriveQuotePeriodicity(q)) }}</div>
+                    </div>
+                    <div>
+                      <span class="text-gray-400 dark:text-gray-500 text-xs">Total</span>
+                      <div class="text-gray-900 dark:text-gray-100 font-semibold">
+                        {{ (q.total_amount ?? 0) | number: '1.2-2' }} {{ q.currency || '€' }}
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <span class="text-gray-400 dark:text-gray-500 text-xs">Periodicidad</span>
-                    <div class="text-gray-700 dark:text-gray-300">{{ getPeriodicityLabel(deriveQuotePeriodicity(q)) }}</div>
-                  </div>
-                  <div>
-                    <span class="text-gray-400 dark:text-gray-500 text-xs">Total</span>
-                    <div class="text-gray-900 dark:text-gray-100 font-semibold">
-                      {{ (q.total_amount ?? 0) | number: '1.2-2' }} {{ q.currency || '€' }}
-                    </div>
-                  </div>
-                </div>
 
-                <div class="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800">
-                  <span class="text-sm text-blue-600 dark:text-blue-400 font-medium">{{ 'portal.quotes.viewDetail' | transloco }} →</span>
-                  @if (canPay(q)) {
-                    <button
-                      (click)="$event.preventDefault(); $event.stopPropagation(); payQuote(q)"
-                      class="px-4 py-2 text-xs font-medium rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 transition-all shadow-sm"
+                  <div class="flex items-center justify-end pt-3 border-t border-gray-100 dark:border-gray-800">
+                    <span class="text-sm text-blue-600 dark:text-blue-400 font-medium">{{ 'portal.quotes.viewDetail' | transloco }} →</span>
+                  </div>
+                </a>
+
+                @if (canViewInvoice(q)) {
+                  <div class="px-4 pb-4">
+                    <a
+                      [routerLink]="['/facturas', q.invoice_id]"
+                      class="w-full inline-flex items-center justify-center gap-1 px-4 py-2 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
                     >
-                      Pagar ahora
-                    </button>
-                  }
-                </div>
-              </a>
+                      {{ 'portal.quoteStatus.viewInvoice' | transloco }}
+                      <span aria-hidden="true">→</span>
+                    </a>
+                  </div>
+                }
+              </div>
             }
           </div>
         }
@@ -285,6 +297,7 @@ export class PortalQuotesComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private toast = inject(ToastService);
+  private transloco = inject(TranslocoService);
 
   quotes = signal<ClientPortalQuote[]>([]);
   loading = signal<boolean>(true);
@@ -316,9 +329,9 @@ export class PortalQuotesComponent implements OnInit, OnDestroy {
       });
     }
 
-    // Status filter
+    // Status filter (quote lifecycle state — sent, viewed, accepted, etc.)
     if (status) {
-      result = result.filter(q => deriveQuotePaymentStatus(q) === status);
+      result = result.filter(q => q.status === status);
     }
 
     // Periodicity filter
@@ -387,45 +400,58 @@ export class PortalQuotesComponent implements OnInit, OnDestroy {
     return new Date(q.valid_until) < new Date();
   }
 
-  /** Can the client pay this quote? */
-  canPay(q: ClientPortalQuote): boolean {
-    const paymentStatus = deriveQuotePaymentStatus(q);
-    if (paymentStatus !== 'pendiente') return false;
-    // Also check if quote is expired
-    if (this.isExpired(q)) return false;
-    return true;
+  /** Localized label for the quote lifecycle state (matches portal-quote-detail). */
+  quoteStateLabel(q: ClientPortalQuote): string {
+    const status = q?.status;
+    if (!status) return '—';
+    const key = `portal.quoteStatus.${status}`;
+    const translated = this.transloco.translate(key);
+    // If the key is missing, Transloco returns the key itself — fall back
+    // to the raw status so the UI never shows the dotted path.
+    return translated && translated !== key ? translated : status;
   }
 
-  /** Navigate to payment */
-  payQuote(q: ClientPortalQuote) {
-    const paymentUrl = q.payment_url || q.stripe_payment_url || q.paypal_payment_url;
-    if (paymentUrl) {
-      window.open(paymentUrl, '_blank');
-    } else {
-      // Navigate to detail which may have payment options
-      this.router.navigate(['/portal/presupuestos', q.id]);
-    }
-  }
-
-  /** Payment-status label for the UI */
-  paymentStatusLabel(q: ClientPortalQuote): string {
-    const ps = deriveQuotePaymentStatus(q);
-    const labels: Record<QuotePaymentStatus, string> = {
-      pendiente: 'Pendiente',
-      pagado: 'Pagado',
-      vencido: 'Vencido',
-    };
-    return labels[ps] || ps;
-  }
-
-  /** Payment-status CSS classes */
-  paymentStatusClass(q: ClientPortalQuote): string {
-    const ps = deriveQuotePaymentStatus(q);
+  /** Semantic colour for the status pill, driven by the quote lifecycle state. */
+  quoteStateBadgeClass(q: ClientPortalQuote): string {
+    const status = q?.status;
     const map: Record<string, string> = {
-      pendiente: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-      pagado: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-      vencido: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+      // Draft = internal-only; client should rarely see it.
+      draft:
+        'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
+      // Sent = awaiting client response.
+      sent:
+        'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+      // Viewed = client opened it but hasn't decided.
+      viewed:
+        'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+      // Accepted = positive terminal state.
+      accepted:
+        'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+      // Invoiced = the quote was turned into a bill.
+      invoiced:
+        'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+      // Rejected = client declined.
+      rejected:
+        'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+      // Expired = past valid_until without a response.
+      expired:
+        'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+      // Cancelled = neutral terminal state.
+      cancelled:
+        'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
     };
-    return map[ps] || 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
+    return (
+      map[status || ''] ||
+      'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+    );
+  }
+
+  /** Show "Ver factura" once the quote has produced an invoice the client
+   *  can open. Mirrors portal-quote-detail.canViewInvoice() so list and
+   *  detail agree on when this link is rendered. */
+  canViewInvoice(q: ClientPortalQuote): boolean {
+    if (!q) return false;
+    const s = q.status;
+    return (s === 'accepted' || s === 'invoiced') && !!q.invoice_id;
   }
 }
