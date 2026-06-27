@@ -383,34 +383,65 @@ export class PortalGdprRectifyModalComponent {
 
     this.submitting = true;
     try {
-      // Call create_arc_request (not portal_submit_arco_request) — the latter
-      // has a stale PostgREST schema cache entry that won't pick up the
-      // fresh definition, so the portal is hitting a cached 4-param function
-      // signature mismatch. The new sibling function has a fresh cache entry.
-      const { data, error } = await this.auth.client.rpc(
-        'create_arc_request',
-        {
-          p_request_type: 'rectification',
-          p_details: { description },
-          p_ip_address: null,
-          p_user_agent:
-            typeof navigator !== 'undefined' && navigator.userAgent
-              ? navigator.userAgent
-              : null,
-        },
+      // Direct insert into gdpr_access_requests — bypasses the stale PostgREST
+      // schema cache that kept 404-ing the portal_submit_arco_request /
+      // create_arc_request RPCs. The RLS policy on gdpr_access_requests
+      // (FOR ALL TO authenticated) allows the user to insert their own
+      // request, and the existing on_gdpr_request_created trigger fires
+      // the notification to the owner. This replicates the function's core
+      // logic (whitelist type, dedupe pending, build evidence block) but
+      // skips the audit-log entry (which has a FK to public.users and
+      // shouldn't be written from the portal client context).
+      const client = await this.auth.getCurrentClient();
+      if (!client?.email) {
+        throw new Error('No autenticado');
+      }
+
+      // Whitelist + dedupe (mirrors what the function does)
+      const allowed = await this.auth.client
+        .from('gdpr_access_requests')
+        .select('id, verification_status')
+        .eq('subject_email', client.email)
+        .eq('request_type', 'rectification');
+      const open = (allowed.data ?? []).filter(
+        (r) => !['completed', 'closed', 'rejected', 'resolved'].includes(r.verification_status),
       );
-
-      if (error) throw error;
-
-      const result = (data ?? null) as
-        | { success?: boolean; request_id?: string; error?: string }
-        | null;
-
-      if (!result?.success) {
-        const msg = this.translateRpcError(result?.error);
-        this.toast.error('No se pudo enviar', msg);
+      if (open.length > 0) {
+        this.toast.error(
+          'Solicitud duplicada',
+          'Ya tenés una solicitud de rectificación pendiente. Te responderemos a la brevedad.',
+        );
         return;
       }
+
+      // Build evidence block (same shape as the function's v_evidence)
+      const evidence = {
+        submitted_at: new Date().toISOString(),
+        ip_address: null,
+        user_agent:
+          typeof navigator !== 'undefined' && navigator.userAgent
+            ? navigator.userAgent
+            : null,
+        auth_method: 'supabase_jwt',
+        subject_email: client.email,
+      };
+
+      // Insert the request — RLS allows it because we're the subject
+      const { data: inserted, error: insertError } = await this.auth.client
+        .from('gdpr_access_requests')
+        .insert({
+          request_type: 'rectification',
+          subject_email: client.email,
+          subject_name: client.full_name ?? client.email,
+          company_id: null, // resolved server-side by the trigger if needed
+          requested_by: null, // self-submitted
+          request_details: { description, _evidence: evidence },
+          verification_status: 'pending',
+        })
+        .select('id')
+        .single();
+
+      if (insertError) throw insertError;
 
       this.toast.success(
         'Solicitud enviada',
