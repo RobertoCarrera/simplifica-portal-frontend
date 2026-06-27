@@ -1028,6 +1028,14 @@ export class PortalServicesComponent implements OnInit, AfterViewChecked {
       // /portal/redsys-return we'll refresh the contracted list.
       return;
     }
+    if (method === 'stripe') {
+      await this.openStripeCheckout(data.id);
+      return;
+    }
+    if (method === 'paypal') {
+      await this.openPayPalCheckout(data.id);
+      return;
+    }
     if (method === 'cash') {
       this.contracted.set([]); // re-fetch on next load
       this.contracting.set(null);
@@ -1035,11 +1043,10 @@ export class PortalServicesComponent implements OnInit, AfterViewChecked {
       this.cashPendingOpen.set(true);
       return;
     }
-    // Stripe / PayPal: same flow as Redsys but no BFF endpoint yet;
-    // show "coming soon" and let the contract sit in pending_payment.
+    // Fallback (shouldn't happen): keep contract pending and ask user to retry.
     this.contracting.set(null);
     this.errorMessage.set(
-      `El pago con ${method} aún no está disponible. Tu solicitud quedó registrada como pendiente.`,
+      `Método de pago "${method}" no soportado todavía. Tu solicitud quedó registrada como pendiente.`,
     );
   }
 
@@ -1079,6 +1086,50 @@ export class PortalServicesComponent implements OnInit, AfterViewChecked {
     } catch (e: any) {
       this.contracting.set(null);
       this.errorMessage.set(e?.message || 'Error iniciando el pago con Redsys');
+    }
+  }
+
+  /**
+   * Stripe Checkout: the BFF returns a redirect URL pointing to the
+   * Stripe-hosted checkout page. We just navigate the browser to it
+   * (no auto-submit form needed because the response is a plain GET
+   * URL, not a Redsys-style POST with hidden fields).
+   */
+  private async openStripeCheckout(contractId: string): Promise<void> {
+    try {
+      this.contracting.set(this.contractModalService()?.id ?? null);
+      const res = await this.portal.initStripeCheckout(contractId);
+      if ('error' in res) {
+        this.contracting.set(null);
+        this.errorMessage.set(`Stripe: ${res.error}`);
+        return;
+      }
+      // Stripe Checkout is a hosted page — simple redirect works.
+      window.location.href = res.redirect_url;
+    } catch (e: any) {
+      this.contracting.set(null);
+      this.errorMessage.set(e?.message || 'Error iniciando el pago con Stripe');
+    }
+  }
+
+  /**
+   * PayPal Checkout: the BFF returns the PayPal approval URL. We redirect
+   * the browser to it. PayPal handles the rest and returns the user to
+   * /portal/redsys-return?provider=paypal.
+   */
+  private async openPayPalCheckout(contractId: string): Promise<void> {
+    try {
+      this.contracting.set(this.contractModalService()?.id ?? null);
+      const res = await this.portal.initPayPalCheckout(contractId);
+      if ('error' in res) {
+        this.contracting.set(null);
+        this.errorMessage.set(`PayPal: ${res.error}`);
+        return;
+      }
+      window.location.href = res.redirect_url;
+    } catch (e: any) {
+      this.contracting.set(null);
+      this.errorMessage.set(e?.message || 'Error iniciando el pago con PayPal');
     }
   }
 

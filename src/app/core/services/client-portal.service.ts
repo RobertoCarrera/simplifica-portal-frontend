@@ -1012,6 +1012,84 @@ export class ClientPortalService {
     }
   }
 
+  /**
+   * Initialize a Stripe Checkout Session for a contract. Returns the URL
+   * Stripe expects the client to be redirected to. The session itself is
+   * created server-side in the BFF so the secret key never leaves the
+   * function.
+   */
+  async initStripeCheckout(contractId: string): Promise<{ redirect_url: string } | { error: string }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-stripe-checkout';
+      const res = await fetch(bffUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ contract_id: contractId }),
+      });
+      if (!res.ok) {
+        let errMsg = `stripe-checkout returned ${res.status}`;
+        try {
+          const errBody = await res.json();
+          if (errBody?.error) errMsg = errBody.error;
+        } catch {
+          const txt = await res.text();
+          errMsg += `: ${txt.substring(0, 300)}`;
+        }
+        return { error: errMsg };
+      }
+      const json = await res.json();
+      return { redirect_url: json?.redirect_url };
+    } catch (e: any) {
+      console.error('[ClientPortalService] initStripeCheckout failed:', e?.message);
+      return { error: e?.message || 'Network error contacting Stripe checkout' };
+    }
+  }
+
+  /**
+   * Initialize a PayPal Order for a contract. Returns the PayPal approval
+   * URL — redirecting the browser to it lets the user confirm on PayPal's
+   * site before the order is captured and the contract status flips to
+   * 'active'.
+   */
+  async initPayPalCheckout(contractId: string): Promise<{ redirect_url: string } | { error: string }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-paypal-checkout';
+      const res = await fetch(bffUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ contract_id: contractId }),
+      });
+      if (!res.ok) {
+        let errMsg = `paypal-checkout returned ${res.status}`;
+        try {
+          const errBody = await res.json();
+          if (errBody?.error) errMsg = errBody.error;
+        } catch {
+          const txt = await res.text();
+          errMsg += `: ${txt.substring(0, 300)}`;
+        }
+        return { error: errMsg };
+      }
+      const json = await res.json();
+      return { redirect_url: json?.redirect_url };
+    } catch (e: any) {
+      console.error('[ClientPortalService] initPayPalCheckout failed:', e?.message);
+      return { error: e?.message || 'Network error contacting PayPal checkout' };
+    }
+  }
+
   /** Create a task in a project. */
   async createTask(projectId: string, input: { title: string; due_date?: string | null }): Promise<{ data: any | null; error?: any }> {
     try {
