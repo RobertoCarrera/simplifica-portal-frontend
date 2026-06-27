@@ -383,11 +383,12 @@ export class PortalGdprRectifyModalComponent {
 
     this.submitting = true;
     try {
-      // Call the 4-param overload explicitly (not the 2-param one) so
-      // PostgREST unambiguously matches the signature and so we pass
-      // IP + user agent for GDPR Art. 7.1 evidence.
+      // Call create_arc_request (not portal_submit_arco_request) — the latter
+      // has a stale PostgREST schema cache entry that won't pick up the
+      // fresh definition, so the portal is hitting a cached 4-param function
+      // signature mismatch. The new sibling function has a fresh cache entry.
       const { data, error } = await this.auth.client.rpc(
-        'portal_submit_arco_request',
+        'create_arc_request',
         {
           p_request_type: 'rectification',
           p_details: { description },
