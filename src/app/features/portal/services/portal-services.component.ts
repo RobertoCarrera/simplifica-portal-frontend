@@ -1048,9 +1048,18 @@ export class PortalServicesComponent implements OnInit, AfterViewChecked {
     try {
       this.contracting.set(this.contractModalService()?.id ?? null);
       const res = await this.portal.initRedsysPayment(contractId);
-      if (!res || !res.form) {
+      if ('error' in res) {
         this.contracting.set(null);
-        this.errorMessage.set('No se pudo iniciar el pago con Redsys');
+        this.errorMessage.set(
+          `Redsys: ${res.error}. Contacta con tu gestor si el problema persiste.`,
+        );
+        return;
+      }
+      if (!res.form) {
+        this.contracting.set(null);
+        this.errorMessage.set(
+          'No se pudo iniciar el pago con Redsys. Es posible que la pasarela no esté configurada para esta empresa. Contacta con tu gestor.',
+        );
         return;
       }
       // Build and auto-submit a hidden form to Redsys.

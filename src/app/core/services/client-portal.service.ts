@@ -976,7 +976,7 @@ export class ClientPortalService {
    * fields (Ds_MerchantParameters, Ds_Signature, ...) to be
    * auto-submitted.
    */
-  async initRedsysPayment(contractId: string): Promise<{ redirect_url: string; form: Record<string, string> } | null> {
+  async initRedsysPayment(contractId: string): Promise<{ redirect_url: string; form: Record<string, string> } | { error: string }> {
     try {
       const token = await this.requireAccessToken();
       const anonKey = this.auth.supabaseKey;
@@ -991,14 +991,24 @@ export class ClientPortalService {
         body: JSON.stringify({ contract_id: contractId }),
       });
       if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(`redsys-init returned ${res.status}: ${txt.substring(0, 300)}`);
+        // Try to extract the JSON error from the BFF so the caller can
+        // surface a meaningful message instead of the generic
+        // 'No se pudo iniciar el pago con Redsys'.
+        let errMsg = `redsys-init returned ${res.status}`;
+        try {
+          const errBody = await res.json();
+          if (errBody?.error) errMsg = errBody.error;
+        } catch {
+          const txt = await res.text();
+          errMsg += `: ${txt.substring(0, 300)}`;
+        }
+        return { error: errMsg };
       }
       const json = await res.json();
       return { redirect_url: json?.redirect_url, form: json?.form };
     } catch (e: any) {
       console.error('[ClientPortalService] initRedsysPayment failed:', e?.message);
-      return null;
+      return { error: e?.message || 'Network error contacting Redsys checkout' };
     }
   }
 
