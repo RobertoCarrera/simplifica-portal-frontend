@@ -828,9 +828,15 @@ export class PortalServicesComponent implements OnInit, AfterViewChecked {
 
   async confirmContract() {
     const s = this.contractModalService();
-    if (!s) return;
+    if (!s) {
+      this.errorMessage.set('No hay servicio seleccionado');
+      return;
+    }
     const method = this.paymentMethod();
-    if (!method) return;
+    if (!method) {
+      this.errorMessage.set('Selecciona un método de pago antes de continuar');
+      return;
+    }
     this.contracting.set(s.id);
     this.errorMessage.set(null);
 
@@ -851,7 +857,9 @@ export class PortalServicesComponent implements OnInit, AfterViewChecked {
     });
     if (error || !data) {
       this.contracting.set(null);
-      this.errorMessage.set(error?.message || 'No se pudo iniciar la contratación');
+      const msg = error?.message || 'No se pudo iniciar la contratación';
+      console.error('[PortalServices] confirmContract failed:', { method, error });
+      this.errorMessage.set(msg);
       return;
     }
 
