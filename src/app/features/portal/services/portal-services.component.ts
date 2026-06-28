@@ -608,6 +608,17 @@ import {
                 <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
                   {{ svc.name }}@if (contractModalVariant()) { · {{ contractModalVariant()!.variant_name }} }
                 </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  @if (svc.recurrence_type) {
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] font-semibold">
+                      <i class="fas fa-sync-alt"></i>
+                      Suscripción {{ recurrenceLabel(svc.recurrence_type) }}
+                    </span>
+                    <span class="ml-2">Se cobrará automáticamente cada {{ recurrenceLabel(svc.recurrence_type) }}. Puedes cancelar en cualquier momento.</span>
+                  } @else {
+                    Pago único · {{ svc.display_price || svc.base_price }} €
+                  }
+                </p>
               </div>
             </div>
             <button
@@ -902,6 +913,16 @@ export class PortalServicesComponent implements OnInit, AfterViewChecked {
     return this.effectiveFlag(s, s.is_bookable, s.is_bookable_in_portal);
   }
 
+  recurrenceLabel(r: 'monthly' | 'weekly' | 'yearly' | 'quarterly' | null | undefined): string {
+    switch (r) {
+      case 'monthly': return 'mensual';
+      case 'weekly': return 'semanal';
+      case 'quarterly': return 'trimestral';
+      case 'yearly': return 'anual';
+      default: return '';
+    }
+  }
+
   async ngOnInit() {
     this.loading.set(true);
     const { data, error } = await this.portal.listServices();
@@ -995,6 +1016,23 @@ export class PortalServicesComponent implements OnInit, AfterViewChecked {
       this.errorMessage.set('Selecciona un método de pago antes de continuar');
       return;
     }
+
+    // Recurring service (subscription) vs one-time payment routing.
+    // For subscriptions the chosen gateway must support billing cycles.
+    const isRecurring = !!s.recurrence_type;
+    if (isRecurring) {
+      if (method === 'cash') {
+        this.errorMessage.set('El pago en metálico no soporta suscripciones. Elige tarjeta o PayPal.');
+        return;
+      }
+      if (method === 'redsys') {
+        // Redsys recurring is Phase 2 — not yet implemented.
+        this.errorMessage.set('Suscripciones con tarjeta (Redsys) próximamente. Por ahora elige PayPal o Stripe.');
+        return;
+      }
+      return await this.startSubscription(method, s);
+    }
+
     this.contracting.set(s.id);
     this.errorMessage.set(null);
 
@@ -1024,8 +1062,6 @@ export class PortalServicesComponent implements OnInit, AfterViewChecked {
     // 2) Dispatch to the gateway.
     if (method === 'redsys') {
       await this.openRedsysGateway(data.id);
-      // The user is now on Redsys' hosted page. When they come back to
-      // /portal/redsys-return we'll refresh the contracted list.
       return;
     }
     if (method === 'stripe') {
@@ -1051,6 +1087,47 @@ export class PortalServicesComponent implements OnInit, AfterViewChecked {
   }
 
   /** Redirects the browser to the Redsys hosted payment page. */
+  private async startSubscription(method: 'paypal' | 'stripe', s: PortalService): Promise<void> {
+    this.contracting.set(s.id);
+    this.errorMessage.set(null);
+    const variant = this.contractModalVariant();
+    // 1. Create the contract row with the recurrence fields populated.
+    //    PayPal/Stripe webhooks will flip status to 'active' on
+    //    successful payment confirmation.
+    const create = await this.portal.contractService({
+      service_id: s.id,
+      variant_id: variant?.id ?? null,
+      pricing_period: this.contractModalPricingPeriod() ?? null,
+      start_date: this.today(),
+      recurrence_type: s.recurrence_type,
+      recurrence_day: s.recurrence_day ?? null,
+      recurrence_start: s.recurrence_start ?? null,
+      recurrence_end: s.recurrence_end ?? null,
+      payment_method: method,
+    });
+    if (create.error || !create.data) {
+      this.contracting.set(null);
+      this.errorMessage.set(create.error?.message || 'No se pudo iniciar la suscripción');
+      return;
+    }
+    const contractId = create.data.id;
+
+    // 2. Call the gateway subscription endpoint to get an approval URL.
+    const result = method === 'paypal'
+      ? await this.portal.initPayPalSubscription(contractId)
+      : await this.portal.initStripeSubscription(contractId);
+    if ('error' in result) {
+      this.contracting.set(null);
+      this.errorMessage.set(result.error);
+      return;
+    }
+    // 3. Redirect the browser to the gateway's hosted approval page.
+    //    For PayPal Subscriptions the approval is a GET to the returned
+    //    href (no auto-submit form needed, unlike the legacy Orders
+    //    flow). For Stripe Checkout Sessions it's a hosted GET page.
+    window.location.href = result.redirect_url;
+  }
+
   private async openRedsysGateway(contractId: string): Promise<void> {
     try {
       this.contracting.set(this.contractModalService()?.id ?? null);

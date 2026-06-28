@@ -141,6 +141,14 @@ export interface PortalService {
   unit_type?: string | null;
   tags?: string[] | null;
   has_variants?: boolean;
+  // Recurring payment fields. When recurrence_type is set, the service
+  // can be subscribed to via PayPal or Stripe subscriptions (Redsys
+  // recurring is Phase 2). recurrence_day is the day of the month for
+  // monthly cycles; ignored for weekly.
+  recurrence_type?: 'monthly' | 'weekly' | 'yearly' | 'quarterly' | null;
+  recurrence_day?: number | null;
+  recurrence_start?: string | null;
+  recurrence_end?: string | null;
   display_price?: number | null;
   display_price_label?: string | null;
   display_price_from_variants?: boolean;
@@ -161,7 +169,7 @@ export interface PortalContractedService {
   currency: string;
   start_date: string;
   status: 'active' | 'paused' | 'cancelled';
-  recurrence_type?: 'monthly' | 'weekly' | 'yearly' | null;
+  recurrence_type?: 'monthly' | 'weekly' | 'yearly' | 'quarterly' | null;
   recurrence_day?: number | null;
   recurrence_start?: string | null;
   recurrence_end?: string | null;
@@ -902,7 +910,7 @@ export class ClientPortalService {
     variant_id?: string | null;
     pricing_period?: 'one-time' | 'monthly' | 'annually' | 'custom' | null;
     start_date?: string | null;
-    recurrence_type?: 'monthly' | 'weekly' | 'yearly' | null;
+    recurrence_type?: 'monthly' | 'weekly' | 'yearly' | 'quarterly' | null;
     recurrence_day?: number | null;
     recurrence_start?: string | null;
     recurrence_end?: string | null;
@@ -1009,6 +1017,74 @@ export class ClientPortalService {
     } catch (e: any) {
       console.error('[ClientPortalService] initRedsysPayment failed:', e?.message);
       return { error: e?.message || 'Network error contacting Redsys checkout' };
+    }
+  }
+
+  /**
+   * Create a PayPal Subscription for a contract. The customer approves
+   * once and PayPal bills on the agreed schedule (BILLING.SUBSCRIPTION.
+   * PAYMENT.COMPLETED events land in client-portal-paypal-billing-webhook
+   * which inserts a row in recurring_charges per successful payment).
+   */
+  async initPayPalSubscription(contractId: string): Promise<{ redirect_url: string; subscription_id: string } | { error: string }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-paypal-subscription-checkout';
+      const res = await fetch(bffUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token ?? ''}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ contract_id: contractId }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        let errMsg = `paypal-subscription-checkout returned ${res.status}`;
+        try { const j = JSON.parse(txt); if (j?.error) errMsg = j.error; } catch { errMsg += `: ${txt.substring(0, 300)}`; }
+        return { error: errMsg };
+      }
+      const json = await res.json();
+      return { redirect_url: json?.redirect_url, subscription_id: json?.subscription_id };
+    } catch (e: any) {
+      console.error('[ClientPortalService] initPayPalSubscription failed:', e?.message);
+      return { error: e?.message || 'Network error contacting PayPal subscription' };
+    }
+  }
+
+  /**
+   * Create a Stripe Subscription (via Checkout Session in subscription
+   * mode). Customer approves, Stripe bills monthly/yearly depending
+   * on the service's recurrence_type. invoice.payment_succeeded events
+   * land in client-portal-stripe-subscription-webhook.
+   */
+  async initStripeSubscription(contractId: string): Promise<{ redirect_url: string; session_id: string } | { error: string }> {
+    try {
+      const token = await this.requireAccessToken();
+      const anonKey = this.auth.supabaseKey;
+      const bffUrl = this.auth.supabaseUrl + '/functions/v1/client-portal-stripe-subscription-checkout';
+      const res = await fetch(bffUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token ?? ''}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ contract_id: contractId }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        let errMsg = `stripe-subscription-checkout returned ${res.status}`;
+        try { const j = JSON.parse(txt); if (j?.error) errMsg = j.error; } catch { errMsg += `: ${txt.substring(0, 300)}`; }
+        return { error: errMsg };
+      }
+      const json = await res.json();
+      return { redirect_url: json?.redirect_url, session_id: json?.session_id };
+    } catch (e: any) {
+      console.error('[ClientPortalService] initStripeSubscription failed:', e?.message);
+      return { error: e?.message || 'Network error contacting Stripe subscription' };
     }
   }
 
