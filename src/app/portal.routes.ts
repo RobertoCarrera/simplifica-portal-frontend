@@ -199,12 +199,12 @@ export const PORTAL_ROUTES: Routes = [
     canActivate: [PortalInviteTokenGuard],
   },
 
-  // Public RGPD consent landing page — token-based, no auth.
-  // The component itself validates the token via the get_client_consent_request
-  // RPC and shows a friendly error for invalid/expired tokens. No guard
-  // needed because the public RPCs (get_client_consent_request,
-  // process_client_consent) only operate on the token — there is no way
-  // to enumerate or escalate from this route.
+  // Public RGPD consent landing page — email-based, no auth.
+  // The component reads ?c=<company_id>&e=<urlencoded_email> from the URL
+  // and identifies the recipient via the (company_id, email) pair — no
+  // token is exposed in the email URL. The public RPCs
+  // (get_consent_request_by_email, process_email_consent) only operate on
+  // this pair; there is no way to enumerate or escalate from this route.
   {
     path: 'consent',
     loadComponent: () =>

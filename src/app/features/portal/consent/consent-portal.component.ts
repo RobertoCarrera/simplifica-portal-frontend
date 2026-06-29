@@ -5,65 +5,68 @@ import {
   PLATFORM_ID,
   inject,
   signal,
-  computed,
 } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { FormsModule } from '@angular/forms';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { RuntimeConfigService } from '../../../core/config/runtime-config.service';
 import { environment } from '@env/environment';
 
 interface ConsentRequest {
-  success: boolean;
-  error?: string;
-  client_id?: string;
-  client_name?: string;
-  subject_email?: string;
-  company_id?: string;
-  company_name?: string;
-  company_nif?: string | null;
-  invitation_status?: string;
-  consent_status?: string;
-  marketing_consent?: boolean;
-  consent_date?: string | null;
-  privacy_policy_url?: string;
+  client_id: string;
+  client_name: string;
+  subject_email: string;
+  company_id: string;
+  company_name: string;
+  company_nif: string | null;
+  invitation_status: string;
+  consent_status: string;
+  privacy_policy_url: string;
+  has_account: boolean;
 }
 
 /**
- * ConsentPortalComponent
+ * ConsentPortalComponent — email-based, RGPD-light consent landing page.
  *
- * Public RGPD consent landing page reached from the link in the
- * consent-migration email. Route: /consent?token=<uuid>
+ * Reached from the link in the consent-migration email. Route:
+ *   /consent?c=<company_id>&e=<urlencoded_email>
  *
- * The token IS the authorization — the page is intentionally NOT behind an
- * auth guard. Both the Accept and Reject paths call
- * process_client_consent(p_token, ...) which looks up the client via
- * invitation_token; an invalid/expired token produces a friendly "enlace no
- * válido" message instead of leaking data.
+ * The (company_id, email) pair IS the authorization — there is no token in
+ * the URL. The page is intentionally NOT behind an auth guard.
  *
- * The page shows the full RGPD Art. 13 controller-identity block
- * (responsable, finalidad, base legal, retention, derechos, AEPD complaint)
- * and exposes two equally-prominent buttons — no dark patterns.
+ * UX (matches the third-party "bizneo" example Roberto shared):
+ *   - Simple Spanish copy: "Hola X, <company> quiere enviarte comunicaciones
+ *     comerciales. ¿Aceptas?"
+ *   - Two equally-prominent buttons (Aceptar / Rechazar) — no dark patterns.
+ *   - Optional subtle "Crear cuenta" link below.
+ *   - No RGPD Art. 13 wall on this view (the email + footer link to the
+ *     privacy policy cover Art. 13; the controller-identity block lives in
+ *     the email body and in /portal/settings for authenticated users).
  *
- * After accepting/rejecting, a subtle "Create account" link is offered
- * (NOT required) — clicking it sends the user to /login (magic-link flow)
- * where they can request an access code to manage their data permanently.
+ * Both the Accept and Reject paths call process_email_consent(p_company_id,
+ * p_email, ...). The RPC writes the gdpr_consent_records audit row and
+ * updates clients (when matched). An invalid (company_id, email) pair
+ * produces a friendly "enlace no válido" view instead of leaking data.
+ *
+ * Account linking: when the user later signs up via magic link, the
+ * trg_link_consents_to_new_user trigger on auth.users backfills
+ * gdpr_consent_records.subject_id from subject_email so the user can see
+ * the consents they gave here from their portal account.
  */
 @Component({
   selector: 'app-consent-portal',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslocoPipe],
+  imports: [CommonModule, RouterLink, TranslocoPipe],
   template: `
     <div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-10 px-4 sm:px-6 lg:px-8">
-      <div class="max-w-2xl mx-auto">
+      <div class="max-w-xl mx-auto">
         @if (loading()) {
           <div class="flex items-center justify-center min-h-[40vh]">
             <div class="animate-spin w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full"></div>
           </div>
-        } @else if (invalidToken()) {
-          <!-- INVALID / EXPIRED TOKEN ────────────────────────────────────── -->
+        } @else if (invalid()) {
+          <!-- INVALID / UNKNOWN CLIENT ───────────────────────────────────── -->
           <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-8 text-center">
             <div class="mx-auto w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mb-4">
               <i class="fas fa-link-slash text-amber-600 dark:text-amber-400 text-2xl"></i>
@@ -78,55 +81,44 @@ interface ConsentRequest {
               {{ 'consentPortal.invalidTokenContact' | transloco }}
             </p>
           </div>
-        } @else if (alreadyCompleted()) {
-          <!-- ALREADY COMPLETED ─────────────────────────────────────────── -->
-          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-8 text-center">
-            <div class="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
-              <i class="fas fa-check text-green-600 dark:text-green-400 text-2xl"></i>
-            </div>
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              {{ 'consentPortal.alreadyCompletedTitle' | transloco }}
-            </h1>
-            <p class="text-gray-600 dark:text-gray-300 mb-2">
-              {{ 'consentPortal.alreadyCompletedBody' | transloco }}
-            </p>
-            @if (requestData()?.company_name) {
-              <p class="text-sm text-gray-500 dark:text-gray-400">
-                {{ 'consentPortal.fromCompany' | transloco: { company: requestData()!.company_name } }}
-              </p>
-            }
-          </div>
         } @else if (submitted()) {
           <!-- SUBMITTED ──────────────────────────────────────────────────── -->
           <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-8 text-center">
             <div class="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
               <i class="fas fa-check text-green-600 dark:text-green-400 text-2xl"></i>
             </div>
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              {{ 'consentPortal.thanksTitle' | transloco }}
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+              @if (lastChoice() === 'accept') {
+                ✓ Has aceptado las comunicaciones de {{ requestData()?.company_name }}
+              } @else {
+                ✓ Has rechazado las comunicaciones de {{ requestData()?.company_name }}
+              }
             </h1>
-            <p class="text-gray-600 dark:text-gray-300 mb-4">
-              {{ 'consentPortal.thanksBody' | transloco: { company: requestData()?.company_name } }}
+            <p class="text-gray-600 dark:text-gray-300 mb-2">
+              Tu decisión ha quedado registrada y conservada conforme al RGPD.
             </p>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
-              {{ 'consentPortal.thanksHint' | transloco }}
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+              Puedes cerrar esta ventana.
             </p>
 
-            <!-- Optional "Create account" CTA — only after a successful submit -->
+            <!-- Subtle "Create account" CTA — only after a successful submit -->
             <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
               <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                {{ 'consentPortal.createAccountPrompt' | transloco }}
+                ¿Quieres gestionar tus datos permanentemente?
               </p>
               <a
-                routerLink="/login"
-                [queryParams]="{ email: requestData()?.subject_email }"
+                [routerLink]="loginLink()"
                 class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 font-medium text-sm transition-colors"
               >
                 <i class="fas fa-user-plus"></i>
-                {{ 'consentPortal.createAccountCta' | transloco }}
+                @if (requestData()?.has_account) {
+                  Iniciar sesión
+                } @else {
+                  Crear cuenta
+                }
               </a>
               <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                {{ 'consentPortal.createAccountSubhint' | transloco }}
+                Te enviaremos un enlace de acceso a tu correo — sin contraseñas.
               </p>
             </div>
           </div>
@@ -136,89 +128,25 @@ interface ConsentRequest {
             <!-- Header -->
             <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
               <p class="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400 mb-1">
-                {{ 'consentPortal.headerEyebrow' | transloco }}
+                RGPD · Tus preferencias
               </p>
               <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
-                {{ 'consentPortal.headerTitle' | transloco: { company: requestData()?.company_name } }}
+                Hola {{ requestData()?.client_name }},
               </h1>
-              @if (requestData()?.client_name) {
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  {{ 'consentPortal.helloName' | transloco: { name: requestData()!.client_name } }}
-                </p>
-              }
             </div>
 
-            <!-- RGPD Art. 13 block -->
-            <div class="px-6 py-5 space-y-4 text-sm text-gray-700 dark:text-gray-300">
-              <p>{{ 'consentPortal.bodyIntro' | transloco }}</p>
-
-              <!-- Controller identity -->
-              <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 space-y-1.5">
-                <p class="font-semibold text-gray-900 dark:text-white">
-                  {{ 'consentPortal.controllerTitle' | transloco }}
-                </p>
-                <p>
-                  <span class="text-gray-500 dark:text-gray-400">{{ 'consentPortal.controllerName' | transloco }}:</span>
-                  <strong>{{ requestData()?.company_name }}</strong>
-                </p>
-                @if (requestData()?.company_nif) {
-                  <p>
-                    <span class="text-gray-500 dark:text-gray-400">{{ 'consentPortal.controllerNif' | transloco }}:</span>
-                    {{ requestData()?.company_nif }}
-                  </p>
-                }
-              </div>
-
-              <!-- Purpose + legal basis + retention -->
-              <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 space-y-1.5">
-                <p>
-                  <span class="text-gray-500 dark:text-gray-400">{{ 'consentPortal.purposeLabel' | transloco }}:</span>
-                  {{ 'consentPortal.purposeValue' | transloco }}
-                </p>
-                <p>
-                  <span class="text-gray-500 dark:text-gray-400">{{ 'consentPortal.legalBasisLabel' | transloco }}:</span>
-                  {{ 'consentPortal.legalBasisValue' | transloco }}
-                </p>
-                <p>
-                  <span class="text-gray-500 dark:text-gray-400">{{ 'consentPortal.retentionLabel' | transloco }}:</span>
-                  {{ 'consentPortal.retentionValue' | transloco }}
-                </p>
-              </div>
-
-              <!-- Marketing checkbox (only field user controls) -->
-              <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                <p class="font-semibold text-gray-900 dark:text-white mb-2">
-                  {{ 'consentPortal.choiceTitle' | transloco }}
-                </p>
-                <label class="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    [(ngModel)]="marketingConsent"
-                    class="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-                    data-testid="marketing-consent-checkbox"
-                  />
-                  <span class="text-sm text-gray-700 dark:text-gray-300">
-                    {{ 'consentPortal.marketingChoiceLabel' | transloco }}
-                  </span>
-                </label>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  {{ 'consentPortal.marketingChoiceHint' | transloco }}
-                </p>
-              </div>
-
-              <!-- Rights -->
-              <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                <p class="font-semibold text-gray-900 dark:text-white mb-1.5">
-                  {{ 'consentPortal.rightsTitle' | transloco }}
-                </p>
-                <p>{{ 'consentPortal.rightsBody' | transloco }}</p>
-                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  {{ 'consentPortal.rightsAepd' | transloco }}
-                </p>
-              </div>
+            <!-- The actual ask — friendly, conversational Spanish -->
+            <div class="px-6 py-6 text-gray-800 dark:text-gray-200">
+              <p class="text-base sm:text-lg leading-relaxed">
+                <strong>{{ requestData()?.company_name }}</strong> quiere enviarte
+                comunicaciones comerciales.
+              </p>
+              <p class="mt-2 text-base sm:text-lg font-medium">
+                ¿Aceptas?
+              </p>
             </div>
 
-            <!-- Action buttons (RGPD Art. 7.3 — equally prominent) -->
+            <!-- Action buttons — equally prominent (RGPD Art. 7.3) -->
             <div class="border-t border-gray-200 dark:border-gray-700 p-6 bg-gray-50 dark:bg-gray-800/50">
               @if (submitError()) {
                 <div class="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
@@ -239,7 +167,7 @@ interface ConsentRequest {
                   } @else {
                     <i class="fas fa-check"></i>
                   }
-                  {{ 'consentPortal.acceptButton' | transloco }}
+                  Aceptar
                 </button>
                 <button
                   type="button"
@@ -253,32 +181,38 @@ interface ConsentRequest {
                   } @else {
                     <i class="fas fa-times"></i>
                   }
-                  {{ 'consentPortal.rejectButton' | transloco }}
+                  Rechazar
                 </button>
               </div>
               <p class="text-xs text-gray-500 dark:text-gray-400 text-center mt-4">
-                {{ 'consentPortal.actionsHint' | transloco }}
+                Ambas opciones tienen la misma visibilidad.
               </p>
             </div>
 
-            <!-- Footer: privacy policy + subtle "Create account" -->
+            <!-- Footer: optional "Create account" + privacy policy link -->
             <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+              <a
+                [routerLink]="loginLink()"
+                class="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:underline"
+              >
+                ¿Quieres gestionar tus datos permanentemente?
+                @if (requestData()?.has_account) {
+                  Iniciar sesión
+                } @else {
+                  Crear cuenta
+                }
+              </a>
               @if (requestData()?.privacy_policy_url) {
                 <a
-                  [routerLink]="requestData()!.privacy_policy_url!"
+                  [href]="requestData()!.privacy_policy_url"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   class="text-xs text-gray-500 dark:text-gray-400 hover:underline"
                 >
                   <i class="fas fa-shield-alt mr-1"></i>
-                  {{ 'consentPortal.privacyPolicyLink' | transloco }}
+                  Política de privacidad
                 </a>
               }
-              <a
-                routerLink="/login"
-                [queryParams]="{ email: requestData()?.subject_email }"
-                class="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:underline"
-              >
-                {{ 'consentPortal.createAccountSubtle' | transloco }}
-              </a>
             </div>
           </div>
         }
@@ -293,69 +227,62 @@ export class ConsentPortalComponent implements OnInit, OnDestroy {
 
   // ── State ────────────────────────────────────────────────────────────
   loading = signal(true);
-  invalidToken = signal(false);
-  alreadyCompleted = signal(false);
+  invalid = signal(false);
   submitted = signal(false);
   submitting = signal(false);
   pendingChoice = signal<'accept' | 'reject' | null>(null);
+  lastChoice = signal<'accept' | 'reject' | null>(null);
   submitError = signal<string | null>(null);
   requestData = signal<ConsentRequest | null>(null);
 
-  // Marketing checkbox — the only field the user actually controls.
-  // Default false: opt-in model per RGPD.
-  marketingConsent = false;
-
-  private token: string | null = null;
+  private companyId: string | null = null;
+  private email: string | null = null;
   private sb: SupabaseClient | null = null;
   private ipifyAbort: AbortController | null = null;
 
   async ngOnInit(): Promise<void> {
-    this.token = this.route.snapshot.queryParamMap.get('token');
+    this.companyId = this.route.snapshot.queryParamMap.get('c');
+    this.email = this.route.snapshot.queryParamMap.get('e');
 
-    if (!this.token) {
+    if (!this.companyId || !this.email) {
       this.loading.set(false);
-      this.invalidToken.set(true);
+      this.invalid.set(true);
       return;
     }
 
     this.sb = this.buildPublicSupabaseClient();
     if (!this.sb) {
       this.loading.set(false);
-      this.invalidToken.set(true);
+      this.invalid.set(true);
       return;
     }
 
     try {
-      const { data, error } = await this.sb.rpc('get_client_consent_request', {
-        p_token: this.token,
+      const { data, error } = await this.sb.rpc('get_consent_request_by_email', {
+        p_company_id: this.companyId,
+        p_email: this.email,
       });
 
       if (error || !data) {
         this.loading.set(false);
-        this.invalidToken.set(true);
+        this.invalid.set(true);
         return;
       }
 
-      const payload = data as ConsentRequest;
-      this.requestData.set(payload);
-
-      if (!payload.success) {
+      // The RPC returns a single row when a client matches, zero rows otherwise.
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) {
         this.loading.set(false);
-        this.invalidToken.set(true);
+        this.invalid.set(true);
         return;
       }
 
-      if (payload.invitation_status === 'completed') {
-        this.loading.set(false);
-        this.alreadyCompleted.set(true);
-        return;
-      }
-
+      this.requestData.set(row as ConsentRequest);
       this.loading.set(false);
     } catch (e) {
       console.error('[ConsentPortal] Failed to load consent request', e);
       this.loading.set(false);
-      this.invalidToken.set(true);
+      this.invalid.set(true);
     }
   }
 
@@ -366,14 +293,25 @@ export class ConsentPortalComponent implements OnInit, OnDestroy {
     }
   }
 
-  async submit(accept: boolean): Promise<void> {
-    if (this.submitting() || !this.token || !this.sb) return;
+  /**
+   * Build the "/login?email=..." link used for both the in-flow "Crear cuenta"
+   * CTA and the post-submit one. The portal login form reads `?email=` and
+   * pre-fills the magic-link field.
+   */
+  loginLink(): string {
+    const email = this.requestData()?.subject_email ?? this.email ?? '';
+    return `/login?email=${encodeURIComponent(email)}`;
+  }
 
-    // Honor the marketing checkbox: accept + marketing=true => record consent_given=true.
-    // accept + marketing=false (default) OR reject => record consent_given=false.
-    // This satisfies RGPD Art. 7 — the user is giving or withholding explicit consent;
-    // the buttons themselves never decide unilaterally.
-    const consentGiven = accept && this.marketingConsent;
+  async submit(accept: boolean): Promise<void> {
+    if (
+      this.submitting() ||
+      !this.companyId ||
+      !this.email ||
+      !this.sb
+    ) {
+      return;
+    }
 
     this.submitting.set(true);
     this.pendingChoice.set(accept ? 'accept' : 'reject');
@@ -384,14 +322,13 @@ export class ConsentPortalComponent implements OnInit, OnDestroy {
       ? (navigator.userAgent || 'unknown')
       : 'server-side';
 
-    const consentMethod = accept
-      ? 'consent_migration_accept'
-      : 'consent_migration_reject';
+    const consentMethod = accept ? 'email_link_accept' : 'email_link_reject';
 
     try {
-      const { data, error } = await this.sb.rpc('process_client_consent', {
-        p_token: this.token,
-        p_marketing_consent: consentGiven,
+      const { data, error } = await this.sb.rpc('process_email_consent', {
+        p_company_id: this.companyId,
+        p_email: this.email,
+        p_marketing_consent: accept,
         p_ip: ip,
         p_user_agent: ua,
         p_consent_method: consentMethod,
@@ -407,6 +344,7 @@ export class ConsentPortalComponent implements OnInit, OnDestroy {
         return;
       }
 
+      this.lastChoice.set(accept ? 'accept' : 'reject');
       this.submitted.set(true);
       this.submitting.set(false);
     } catch (e: any) {
@@ -424,7 +362,8 @@ export class ConsentPortalComponent implements OnInit, OnDestroy {
   private buildPublicSupabaseClient(): SupabaseClient | null {
     const cfg = this.runtimeConfig.getSupabase();
     const supabaseUrl = cfg?.url?.trim() || environment.supabase?.url || '';
-    const supabaseAnonKey = cfg?.anonKey?.trim() || environment.supabase?.anonKey || '';
+    const supabaseAnonKey =
+      cfg?.anonKey?.trim() || environment.supabase?.anonKey || '';
     if (!supabaseUrl || !supabaseAnonKey) {
       console.warn('[ConsentPortal] Supabase URL or anon key not configured');
       return null;
