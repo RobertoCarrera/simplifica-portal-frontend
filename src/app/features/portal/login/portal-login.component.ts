@@ -1,6 +1,6 @@
-import { Component, inject, signal, OnDestroy } from '@angular/core';
+import { Component, inject, signal, OnDestroy, OnInit } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { PortalAuthService } from '../../../core/services/portal-auth.service';
 import { ToastService } from '../../../shared/services/toast.service';
 
@@ -219,9 +219,10 @@ import { ToastService } from '../../../shared/services/toast.service';
     }
   `],
 })
-export class PortalLoginComponent implements OnDestroy {
+export class PortalLoginComponent implements OnInit, OnDestroy {
   private auth = inject(PortalAuthService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
   private fb = inject(FormBuilder);
   private toastService = inject(ToastService);
 
@@ -233,9 +234,21 @@ export class PortalLoginComponent implements OnDestroy {
 
   private cooldownTimer: ReturnType<typeof setInterval> | null = null;
 
+  /**
+   * Pre-fill the email field when arriving from the consent page via
+   * `/login?email=foo@bar`. Saves the user one keystroke and removes the
+   * risk of typos that would send the magic link to the wrong address.
+   */
   loginForm = this.fb.group({
     email: ['', [Validators.required, Validators.email]],
   });
+
+  ngOnInit(): void {
+    const presetEmail = this.route.snapshot.queryParamMap.get('email');
+    if (presetEmail && presetEmail.trim()) {
+      this.loginForm.patchValue({ email: presetEmail.trim().toLowerCase() });
+    }
+  }
 
   emailInvalid = () => {
     const control = this.loginForm.get('email');
