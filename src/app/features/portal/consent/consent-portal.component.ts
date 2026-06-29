@@ -100,76 +100,56 @@ interface ConsentChoices {
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-3">
               Hemos registrado tu decisión
             </h1>
-            <p class="text-gray-600 dark:text-gray-300 mb-4">
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
               Tu respuesta para <strong>{{ requestData()?.company_name }}</strong>
-              se ha guardado conforme al RGPD. Estas son las finalidades que has aceptado:
+              se ha guardado conforme al RGPD.
             </p>
 
-            <!-- Summary of the 3 decisions -->
-            <ul class="text-left max-w-sm mx-auto space-y-2 mb-6">
-              <li class="flex items-start gap-2">
-                <i class="fas" [class.fa-check-circle]="lastChoices()?.tos"
-                   [class.text-green-500]="lastChoices()?.tos"
-                   [class.fa-times-circle]="!lastChoices()?.tos"
-                   [class.text-red-400]="!lastChoices()?.tos"></i>
-                <span>
-                  <strong>Términos de uso y servicio:</strong>
-                  {{ lastChoices()?.tos ? 'aceptados' : 'rechazados' }}
-                </span>
+            <!-- Summary of the 3 decisions (kept compact — the portal CTA below is the focus) -->
+            <ul class="text-left max-w-xs mx-auto space-y-1 mb-4 text-xs text-gray-500 dark:text-gray-400">
+              <li class="flex items-center gap-1.5">
+                <i class="fas fa-check text-green-500 text-[10px]"></i>
+                <span>Términos de uso: {{ lastChoices()?.tos ? 'aceptados' : 'rechazados' }}</span>
               </li>
-              <li class="flex items-start gap-2">
-                <i class="fas" [class.fa-check-circle]="lastChoices()?.privacy"
-                   [class.text-green-500]="lastChoices()?.privacy"
-                   [class.fa-times-circle]="!lastChoices()?.privacy"
-                   [class.text-red-400]="!lastChoices()?.privacy"></i>
-                <span>
-                  <strong>Política de privacidad:</strong>
-                  {{ lastChoices()?.privacy ? 'aceptada' : 'rechazada' }}
-                </span>
+              <li class="flex items-center gap-1.5">
+                <i class="fas fa-check text-green-500 text-[10px]"></i>
+                <span>Privacidad: {{ lastChoices()?.privacy ? 'aceptada' : 'rechazada' }}</span>
               </li>
-              <li class="flex items-start gap-2">
-                <i class="fas" [class.fa-check-circle]="lastChoices()?.marketing"
-                   [class.text-green-500]="lastChoices()?.marketing"
-                   [class.fa-times-circle]="!lastChoices()?.marketing"
-                   [class.text-red-400]="!lastChoices()?.marketing"></i>
-                <span>
-                  <strong>Comunicaciones comerciales:</strong>
-                  {{ lastChoices()?.marketing ? 'aceptadas' : 'rechazadas' }}
-                </span>
+              <li class="flex items-center gap-1.5">
+                <i class="fas" [class.fa-check]="lastChoices()?.marketing" [class.text-green-500]="lastChoices()?.marketing"
+                   [class.fa-times]="!lastChoices()?.marketing" [class.text-red-400]="!lastChoices()?.marketing"
+                   class="text-[10px]"></i>
+                <span>Comerciales: {{ lastChoices()?.marketing ? 'aceptadas' : 'rechazadas' }}</span>
               </li>
             </ul>
 
-            <p class="text-sm text-gray-500 dark:text-gray-400">
-              Puedes cerrar esta ventana.
-            </p>
-
             <!-- Post-submit benefits pitch + auto magic-link CTA -->
-            <div class="mt-6 pt-6 border-t border-gray-200 dark:border-slate-700 text-left">
-              <p class="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+            <div class="mt-2 pt-6 border-t-2 border-blue-200 dark:border-blue-800 text-left bg-blue-50/50 dark:bg-blue-900/10 -mx-8 -mb-8 px-8 pb-8 rounded-b-xl">
+              <p class="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-1">
                 @if (requestData()?.has_account) {
                   Accede a tu portal para gestionar todo en un solo lugar
                 } @else {
-                  Crea tu cuenta gratuita y empieza a usarlo
+                  Crea tu cuenta gratuita
                 }
               </p>
-              <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                Desde el portal de {{ requestData()?.company_name }} podrás:
+              <p class="text-sm text-gray-700 dark:text-gray-300 mb-4">
+                Desde el portal de <strong>{{ requestData()?.company_name }}</strong> podrás:
               </p>
-              <ul class="text-xs text-gray-700 dark:text-gray-300 space-y-1.5 mb-4 ml-1">
-                <li class="flex items-start gap-2">
-                  <i class="fas fa-calendar-check text-blue-500 mt-0.5"></i>
+              <ul class="text-sm text-gray-800 dark:text-gray-200 space-y-2.5 mb-5">
+                <li class="flex items-start gap-3">
+                  <i class="fas fa-calendar-check text-blue-600 dark:text-blue-400 mt-0.5 w-4"></i>
                   <span>Consultar y gestionar tus <strong>citas</strong> y reservas</span>
                 </li>
-                <li class="flex items-start gap-2">
-                  <i class="fas fa-file-invoice text-blue-500 mt-0.5"></i>
+                <li class="flex items-start gap-3">
+                  <i class="fas fa-file-invoice text-blue-600 dark:text-blue-400 mt-0.5 w-4"></i>
                   <span>Ver y descargar tus <strong>facturas</strong></span>
                 </li>
-                <li class="flex items-start gap-2">
-                  <i class="fas fa-file-signature text-blue-500 mt-0.5"></i>
+                <li class="flex items-start gap-3">
+                  <i class="fas fa-file-signature text-blue-600 dark:text-blue-400 mt-0.5 w-4"></i>
                   <span>Revisar <strong>presupuestos</strong> y aceptarlos online</span>
                 </li>
-                <li class="flex items-start gap-2">
-                  <i class="fas fa-folder-open text-blue-500 mt-0.5"></i>
+                <li class="flex items-start gap-3">
+                  <i class="fas fa-folder-open text-blue-600 dark:text-blue-400 mt-0.5 w-4"></i>
                   <span>Acceder a tus <strong>documentos</strong> y contratos</span>
                 </li>
               </ul>
@@ -220,6 +200,11 @@ interface ConsentChoices {
                 Sin contraseñas — el enlace es personal e intransferible.
               </p>
             </div>
+
+            <!-- Close hint — at the very bottom so the user reads the benefits first -->
+            <p class="text-xs text-gray-400 dark:text-gray-500 mt-4 text-center">
+              Puedes cerrar esta ventana.
+            </p>
           </div>
         } @else {
           <!-- MAIN CONSENT UI ───────────────────────────────────────────── -->
