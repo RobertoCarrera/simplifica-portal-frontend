@@ -11,6 +11,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { RuntimeConfigService } from '../../../core/config/runtime-config.service';
+import { PortalAuthService } from '../../../core/services/portal-auth.service';
 import { environment } from '@env/environment';
 
 interface ConsentRequest {
@@ -142,24 +143,81 @@ interface ConsentChoices {
               Puedes cerrar esta ventana.
             </p>
 
-            <!-- Subtle "Create account" CTA — only after a successful submit -->
-            <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-              <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                ¿Quieres gestionar tus datos permanentemente?
-              </p>
-              <a
-                [routerLink]="loginLink()"
-                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 font-medium text-sm transition-colors"
-              >
-                <i class="fas fa-user-plus"></i>
+            <!-- Post-submit benefits pitch + auto magic-link CTA -->
+            <div class="mt-6 pt-6 border-t border-gray-200 dark:border-slate-700 text-left">
+              <p class="text-sm font-semibold text-gray-900 dark:text-white mb-2">
                 @if (requestData()?.has_account) {
-                  Iniciar sesión
+                  Accede a tu portal para gestionar todo en un solo lugar
                 } @else {
-                  Crear cuenta
+                  Crea tu cuenta gratuita y empieza a usarlo
                 }
-              </a>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                Te enviaremos un enlace de acceso a tu correo — sin contraseñas.
+              </p>
+              <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                Desde el portal de {{ requestData()?.company_name }} podrás:
+              </p>
+              <ul class="text-xs text-gray-700 dark:text-gray-300 space-y-1.5 mb-4 ml-1">
+                <li class="flex items-start gap-2">
+                  <i class="fas fa-calendar-check text-blue-500 mt-0.5"></i>
+                  <span>Consultar y gestionar tus <strong>citas</strong> y reservas</span>
+                </li>
+                <li class="flex items-start gap-2">
+                  <i class="fas fa-file-invoice text-blue-500 mt-0.5"></i>
+                  <span>Ver y descargar tus <strong>facturas</strong></span>
+                </li>
+                <li class="flex items-start gap-2">
+                  <i class="fas fa-file-signature text-blue-500 mt-0.5"></i>
+                  <span>Revisar <strong>presupuestos</strong> y aceptarlos online</span>
+                </li>
+                <li class="flex items-start gap-2">
+                  <i class="fas fa-folder-open text-blue-500 mt-0.5"></i>
+                  <span>Acceder a tus <strong>documentos</strong> y contratos</span>
+                </li>
+              </ul>
+
+              @if (!magicLinkSent()) {
+                <button
+                  type="button"
+                  (click)="sendMagicLink()"
+                  [disabled]="sendingMagicLink()"
+                  data-testid="send-magic-link-btn"
+                  class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium text-sm transition-colors"
+                >
+                  @if (sendingMagicLink()) {
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Enviando enlace...</span>
+                  } @else {
+                    <i class="fas fa-paper-plane"></i>
+                    <span>
+                      {{ requestData()?.has_account ? 'Reenviar enlace de acceso' : 'Crear cuenta y enviar enlace' }}
+                    </span>
+                  }
+                </button>
+              } @else {
+                <div class="p-3 rounded-lg bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-200 flex items-start gap-2">
+                  <i class="fas fa-check-circle mt-0.5"></i>
+                  <div>
+                    <strong>Enlace enviado</strong>
+                    <p class="text-xs mt-1 text-green-700 dark:text-green-300">
+                      Te hemos enviado un enlace de acceso a
+                      <strong>{{ magicLinkEmail() }}</strong>. Revisa tu correo (y la
+                      carpeta de spam) — el enlace caduca en 1 hora.
+                    </p>
+                  </div>
+                </div>
+              }
+
+              @if (magicLinkError()) {
+                <div
+                  class="mt-2 p-2 rounded bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300"
+                  data-testid="magic-link-error"
+                >
+                  <i class="fas fa-exclamation-circle mr-1"></i>
+                  {{ magicLinkError() }}
+                </div>
+              }
+
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+                Sin contraseñas — el enlace es personal e intransferible.
               </p>
             </div>
           </div>
@@ -188,11 +246,13 @@ interface ConsentChoices {
                 class="flex items-start gap-3 py-3 cursor-pointer"
                 data-testid="consent-row-tos"
               >
-                <input
+                 <input
                   type="checkbox"
-                  class="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                  class="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0 disabled:opacity-70 disabled:cursor-not-allowed"
                   [checked]="prefs().tos"
-                  (change)="setPref('tos', $any($event.target).checked)"
+                  [disabled]="true"
+                  aria-readonly="true"
+                  data-testid="consent-checkbox-tos"
                 />
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
@@ -215,11 +275,13 @@ interface ConsentChoices {
                 class="flex items-start gap-3 py-3 cursor-pointer"
                 data-testid="consent-row-privacy"
               >
-                <input
+                 <input
                   type="checkbox"
-                  class="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                  class="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0 disabled:opacity-70 disabled:cursor-not-allowed"
                   [checked]="prefs().privacy"
-                  (change)="setPref('privacy', $any($event.target).checked)"
+                  [disabled]="true"
+                  aria-readonly="true"
+                  data-testid="consent-checkbox-privacy"
                 />
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
@@ -300,8 +362,8 @@ interface ConsentChoices {
                   data-testid="reject-all-btn"
                   class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-500 hover:border-gray-400 dark:hover:border-gray-400 disabled:cursor-not-allowed text-gray-800 dark:text-white font-semibold text-sm transition-colors"
                 >
-                  <i class="fas fa-ban"></i>
-                  Rechazar todas
+                  <i class="fas fa-bell-slash"></i>
+                  Rechazar comunicaciones
                 </button>
               </div>
 
@@ -309,7 +371,7 @@ interface ConsentChoices {
               <button
                 type="button"
                 (click)="submitCurrent()"
-                [disabled]="submitting() || !hasAnyChoice()"
+                [disabled]="submitting()"
                 data-testid="submit-current-btn"
                 class="mt-3 w-full inline-flex items-center justify-center gap-2 px-5 py-2 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:text-gray-400 disabled:cursor-not-allowed font-medium text-sm transition-colors"
               >
@@ -322,8 +384,9 @@ interface ConsentChoices {
               </button>
 
               <p class="text-xs text-gray-500 dark:text-gray-400 text-center mt-4">
-                Cada finalidad es independiente. "Aceptar todas" y "Rechazar todas"
-                son solo atajos — puedes ajustar las casillas antes de guardar.
+                Los <strong>términos de uso y la política de privacidad son obligatorios</strong>
+                para seguir usando nuestros servicios. Las comunicaciones comerciales son opcionales
+                y puedes desactivarlas cuando quieras.
               </p>
             </div>
 
@@ -362,6 +425,7 @@ export class ConsentPortalComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private runtimeConfig = inject(RuntimeConfigService);
   private platformId = inject(PLATFORM_ID);
+  private authService = inject(PortalAuthService);
 
   // ── State ────────────────────────────────────────────────────────────
   loading = signal(true);
@@ -371,10 +435,23 @@ export class ConsentPortalComponent implements OnInit, OnDestroy {
   submitError = signal<string | null>(null);
   requestData = signal<ConsentRequest | null>(null);
 
+  // Magic-link send (post-submit "Crear cuenta / Iniciar sesión" CTA).
+  // Feedback states so the button can show spinner → sent / error.
+  sendingMagicLink = signal(false);
+  magicLinkSent = signal(false);
+  magicLinkError = signal<string | null>(null);
+
   // Three independent consent toggles. Default: all unchecked — the user
-  // must opt in to each. RGPD Art. 7 requires the consent action to be a
-  // clear affirmative act; pre-checked boxes are forbidden.
-  prefs = signal<ConsentChoices>({ tos: false, privacy: false, marketing: false });
+  // RGPD-business rules:
+  //   - TOS and Privacy are MANDATORY for using the service. If a client
+  //     declines either, the data controller (the company) cannot legally
+  //     keep their data, so the only consequence is account deletion.
+  //     The portal does not let the user decline them — they're locked at
+  //     true and the checkboxes are disabled.
+  //   - Marketing is OPTIONAL. The user can freely opt in or out.
+  // Marketing also still requires RGPD Art. 7 (clear affirmative act) — so
+  // the default is unchecked.
+  prefs = signal<ConsentChoices>({ tos: true, privacy: true, marketing: false });
   lastChoices = signal<ConsentChoices | null>(null);
 
   private companyId: string | null = null;
@@ -447,6 +524,56 @@ export class ConsentPortalComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Canonical email to send the magic link to. Prefer the server's
+   * `subject_email` (already validated client-side by the CRM BFF) and fall
+   * back to the raw query param. Used by the post-submit benefits CTA.
+   */
+  magicLinkEmail(): string {
+    return this.requestData()?.subject_email ?? this.email ?? '';
+  }
+
+  /**
+   * POST the consent recipient's email to the existing `portal-request-otp`
+   * edge function (NOT `supabase.auth.signInWithOtp` directly — the anon-key
+   * OTP path is broken in the portal Supabase project, see portal-auth.service).
+   * The edge function preserves the anti-enumeration contract: unknown /
+   * inactive emails still return success without sending.
+   *
+   * The redirect target is configured at the Supabase project level
+   * (dashboard → URL Configuration → redirect URLs) and lands on
+   * `/auth/callback`, which then routes the freshly signed-in user to the
+   * portal dashboard. We intentionally do NOT pass `emailRedirectTo` here —
+   * the edge function chooses the redirect per origin, and pre-setting it
+   * would override that.
+   */
+  async sendMagicLink(): Promise<void> {
+    const email = this.magicLinkEmail();
+    if (!email) {
+      this.magicLinkError.set('No se ha podido determinar el correo del destinatario.');
+      return;
+    }
+    if (this.sendingMagicLink() || this.magicLinkSent()) {
+      return;
+    }
+
+    this.sendingMagicLink.set(true);
+    this.magicLinkError.set(null);
+
+    try {
+      const result = await this.authService.loginWithOTP(email);
+      if (!result.success) {
+        this.magicLinkError.set(result.error ?? 'No se pudo enviar el enlace.');
+        return;
+      }
+      this.magicLinkSent.set(true);
+    } catch (e: any) {
+      this.magicLinkError.set(e?.message ?? 'No se pudo enviar el enlace.');
+    } finally {
+      this.sendingMagicLink.set(false);
+    }
+  }
+
+  /**
    * Toggle a single consent purpose (tos / privacy / marketing).
    * Uses immutable signal update to keep change detection cheap.
    */
@@ -454,14 +581,23 @@ export class ConsentPortalComponent implements OnInit, OnDestroy {
     this.prefs.update((p) => ({ ...p, [key]: value }));
   }
 
-  /** Mark all three consents as granted. */
+  /**
+   * Mark all three consents as granted AND auto-submit.
+   * (TOS/privacy are already locked at true in the prefs default; this just
+   * toggles marketing on top and immediately saves.)
+   */
   acceptAll(): void {
     this.prefs.set({ tos: true, privacy: true, marketing: true });
+    void this.submitCurrent();
   }
 
-  /** Mark all three consents as rejected. */
+  /**
+   * Decline the OPTIONAL consent (marketing) AND auto-submit.
+   * TOS and privacy stay true — they're mandatory for using the service.
+   */
   rejectAll(): void {
-    this.prefs.set({ tos: false, privacy: false, marketing: false });
+    this.prefs.set({ tos: true, privacy: true, marketing: false });
+    void this.submitCurrent();
   }
 
   /**
@@ -499,8 +635,7 @@ export class ConsentPortalComponent implements OnInit, OnDestroy {
     if (
       this.submitting() ||
       !this.companyId ||
-      !this.email ||
-      !this.sb
+      !this.email
     ) {
       return;
     }
