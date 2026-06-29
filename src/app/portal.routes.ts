@@ -199,6 +199,20 @@ export const PORTAL_ROUTES: Routes = [
     canActivate: [PortalInviteTokenGuard],
   },
 
+  // Public RGPD consent landing page — token-based, no auth.
+  // The component itself validates the token via the get_client_consent_request
+  // RPC and shows a friendly error for invalid/expired tokens. No guard
+  // needed because the public RPCs (get_client_consent_request,
+  // process_client_consent) only operate on the token — there is no way
+  // to enumerate or escalate from this route.
+  {
+    path: 'consent',
+    loadComponent: () =>
+      import('./features/portal/consent/consent-portal.component').then(
+        (m) => m.ConsentPortalComponent,
+      ),
+  },
+
   // Catch-all - redirect to dashboard
   { path: '**', redirectTo: 'dashboard' },
 ];
