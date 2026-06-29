@@ -117,6 +117,17 @@ export const PORTAL_ROUTES: Routes = [
             (m) => m.PortalSettingsComponent,
           ),
       },
+      // RGPD preferences (Consentimientos) — granular self-service for the
+      // authenticated portal user. Shows TOS / Privacy / Marketing toggles
+      // pre-checked from their last gdpr_consent_records rows and offers a
+      // "Withdraw all consents" button (RGPD Art. 7.3).
+      {
+        path: 'settings/preferences',
+        loadComponent: () =>
+          import('./features/portal/preferences/portal-preferences.component').then(
+            (m) => m.PortalPreferencesComponent,
+          ),
+      },
       // Projects (Proyectos) — portal client can list / create their own
       {
         path: 'projects',
