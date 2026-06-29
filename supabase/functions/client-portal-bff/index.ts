@@ -12,15 +12,22 @@
 //      (RLS on client_portal_users/invoices/quotes/bookings/client_documents doesn't have client-scoped policies yet)
 //   6. DTO mapping: strict explicit field whitelists — no spread, no extra fields
 //
-// Routes (all require authenticated client JWT):
-//   GET  /profile → clients profile + GDPR consents
-//   GET  /appointments → bookings for the client (future by default, ?include_past=true for all)
-//   GET  /invoices     → invoices for the client
-//   GET  /quotes       → quotes for the client (non-draft)
-//   GET  /documents    → document metadata + presigned download URLs
-//   GET  /services     → public services catalog (from CRM cross-project)
+// Routes (all require authenticated client JWT unless marked PUBLIC):
+//   GET  /profile             → clients profile + GDPR consents
+//   GET  /appointments        → bookings for the client (future by default, ?include_past=true for all)
+//   GET  /invoices            → invoices for the client
+//   GET  /invoices/:id        → single invoice detail
+//   GET  /quotes              → quotes for the client (non-draft)
+//   GET  /quotes/:id          → single quote detail
+//   GET  /documents           → document metadata + presigned download URLs
+//   GET  /services            → public services catalog (from CRM cross-project)
 //   GET  /contracted-services → services the client has contracted
-//   POST /consents     → update marketing_consent / privacy_policy_consent only
+//   GET  /modules             → active modules for the client's company
+//   POST /consents            → update marketing_consent / privacy_policy_consent only
+//
+// PUBLIC routes (no JWT — authorized by (company_id, email) pair in URL):
+//   GET  /consent-request     → RGPD consent landing page data (CRM RPC bridge)
+//   POST /process-email-consent → accept/reject RGPD consent (CRM RPC bridge)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -309,6 +316,164 @@ async function authenticate(
 }
 
 // ─── Route Handlers ──────────────────────────────────────────────────────────
+
+// UUID v4 regex for validating path/query params before passing to RPCs.
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * GET /consent-request  (PUBLIC — no JWT required)
+ *
+ * Bridge endpoint for the email-based RGPD consent landing page on the
+ * client portal (portal.simplificacrm.es). The portal runs in a DIFFERENT
+ * Supabase project (lsntpezzhinnohggezxy) than the CRM (ufutyjbqfjrlzkprvyvs)
+ * where the `get_consent_request_by_email` RPC lives. Since the RPC does not
+ * exist in the portal DB, the portal would otherwise fall through to the
+ * "invalid link" branch on every load.
+ *
+ * This endpoint is reached with the (company_id, email) pair from the URL.
+ * That pair IS the authorization — there is no token, no JWT, no session.
+ * Rate limiting is enforced per-IP to prevent enumeration of valid pairs.
+ *
+ * The `admin` client (created from SUPABASE_URL + SERVICE_ROLE_KEY) points
+ * at the CRM DB when this function is deployed there, so the RPC resolves
+ * locally with service-role privileges.
+ *
+ * Returns the single matching row as JSON, or 404 { error: "not_found" }.
+ */
+async function handleConsentRequest(
+  admin: ReturnType<typeof createClient>,
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const url = new URL(req.url);
+  const companyId = url.searchParams.get('company_id');
+  const email = url.searchParams.get('email');
+
+  if (!companyId || !email) {
+    return jsonError(400, 'company_id and email query params are required', corsHeaders);
+  }
+  if (!UUID_REGEX.test(companyId)) {
+    return jsonError(400, 'Invalid company_id (must be UUID)', corsHeaders);
+  }
+  if (email.length > 320) {
+    return jsonError(400, 'Invalid email (too long)', corsHeaders);
+  }
+
+  const { data, error } = await admin.rpc('get_consent_request_by_email', {
+    p_company_id: companyId,
+    p_email: email,
+  });
+
+  if (error) {
+    console.error('[client-portal-bff] consent-request RPC failed:', error.message);
+    return jsonError(500, 'Failed to fetch consent request', corsHeaders);
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) {
+    return jsonError(404, 'not_found', corsHeaders);
+  }
+
+  return jsonOk(row, corsHeaders);
+}
+
+/**
+ * POST /process-email-consent  (PUBLIC — no JWT required)
+ *
+ * Accept/Reject bridge for the email-based RGPD consent landing page.
+ * Mirrors `get_consent_request_by_email`: the RPC `process_email_consent`
+ * lives in the CRM DB, not the portal DB. The portal calls this BFF endpoint
+ * cross-origin and we forward to the RPC with service-role privileges.
+ *
+ * RGPD Art. 7 requires granular per-purpose consent. The body now carries
+ * THREE booleans — one per consent purpose:
+ *
+ *   p_tos_consent       — terms of service acceptance  (service_provision)
+ *   p_privacy_consent   — privacy policy acceptance    (privacy_policy_acceptance)
+ *   p_marketing_consent — marketing communications     (marketing_communications)
+ *
+ * Body:
+ *   {
+ *     p_company_id:        uuid,
+ *     p_email:             string,
+ *     p_tos_consent:       boolean,   // REQUIRED
+ *     p_privacy_consent:   boolean,   // REQUIRED
+ *     p_marketing_consent: boolean,   // REQUIRED (the only optional-purpose consent)
+ *     p_ip?:               string,
+ *     p_user_agent?:       string,    // mapped to RPC's `p_ua` parameter
+ *     p_consent_method?:   string,    // e.g. 'email_link_accept_all' / 'email_link_reject_all' / 'email_link'
+ *   }
+ *
+ * Returns the RPC's jsonb payload directly. The RPC's signature uses `p_ua`
+ * for the user-agent field — we accept `p_user_agent` from the wire and map
+ * internally for forward-compat with the existing component callers.
+ */
+async function handleProcessEmailConsent(
+  admin: ReturnType<typeof createClient>,
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonError(400, 'Invalid JSON body', corsHeaders);
+  }
+
+  const companyId = body.p_company_id as string | undefined;
+  const email = body.p_email as string | undefined;
+  const tosConsent = body.p_tos_consent as boolean | undefined;
+  const privacyConsent = body.p_privacy_consent as boolean | undefined;
+  const marketingConsent = body.p_marketing_consent as boolean | undefined;
+  const ip = (body.p_ip as string | null | undefined) ?? null;
+  const ua = (body.p_user_agent as string | null | undefined) ?? null;
+  const consentMethod =
+    (body.p_consent_method as string | undefined) ?? 'email_link';
+
+  if (!companyId || !email) {
+    return jsonError(
+      400,
+      'p_company_id and p_email are required',
+      corsHeaders,
+    );
+  }
+  if (
+    typeof tosConsent !== 'boolean' ||
+    typeof privacyConsent !== 'boolean' ||
+    typeof marketingConsent !== 'boolean'
+  ) {
+    return jsonError(
+      400,
+      'p_tos_consent, p_privacy_consent, and p_marketing_consent must all be booleans',
+      corsHeaders,
+    );
+  }
+  if (!UUID_REGEX.test(companyId)) {
+    return jsonError(400, 'Invalid p_company_id (must be UUID)', corsHeaders);
+  }
+  if (email.length > 320) {
+    return jsonError(400, 'Invalid p_email (too long)', corsHeaders);
+  }
+
+  const { data, error } = await admin.rpc('process_email_consent', {
+    p_company_id: companyId,
+    p_email: email,
+    p_tos_consent: tosConsent,
+    p_privacy_consent: privacyConsent,
+    p_marketing_consent: marketingConsent,
+    p_ip: ip,
+    p_ua: ua, // RPC parameter is `p_ua`, not `p_user_agent`
+    p_consent_method: consentMethod,
+  });
+
+  if (error) {
+    console.error('[client-portal-bff] process-email-consent RPC failed:', error.message);
+    return jsonError(500, 'Failed to process consent', corsHeaders);
+  }
+
+  return jsonOk(data ?? { success: true }, corsHeaders);
+}
 
 /**
  * GET /profile
@@ -1011,6 +1176,17 @@ serve(async (req: Request) => {
     auth: { persistSession: false },
   });
 
+  // CRM admin client — used ONLY by the public consent-bridge endpoints
+  // (consent-request, process-email-consent) to call RPCs that live in the
+  // CRM DB, not the portal DB. Falls back to the portal admin if CRM env
+  // vars are missing (graceful degradation, though the RPC call will fail
+  // in that case — which is the correct behavior).
+  const crmAdmin = CRM_SUPABASE_URL && CRM_SERVICE_ROLE_KEY
+    ? createClient(CRM_SUPABASE_URL, CRM_SERVICE_ROLE_KEY, {
+        auth: { persistSession: false },
+      })
+    : admin;
+
   // ── Rate limiting (per authenticated user, not per IP) ──────────────────────
   // We extract user ID first for per-user keying.
   // On auth failure, we fall back to IP-based limiting.
@@ -1049,13 +1225,6 @@ serve(async (req: Request) => {
     });
   }
 
-  // ── Authentication & authorization ─────────────────────────────────────────
-  const authResult = await authenticate(req, admin, corsHeaders);
-  if (authResult instanceof Response) {
-    return authResult;
-  }
-  const ctx = authResult as AuthContext;
-
   // ── URL routing ─────────────────────────────────────────────────────────────
   const url = new URL(req.url);
   // Normalize: strip trailing slash
@@ -1063,9 +1232,40 @@ serve(async (req: Request) => {
   // Support both /client-portal-bff/profile and /profile
   const route = path.split('/').pop() ?? '';
 
+  // ── Public routes (no JWT — authorized by (company_id, email) in URL) ──────
+  // The email-based RGPD consent landing page is reached from a magic email
+  // link where the user has NOT signed in. The (company_id, email) pair IS
+  // the authorization. These endpoints MUST skip the authenticate() call
+  // because there's no JWT to validate — and the RPCs live in the CRM DB,
+  // not the portal DB, so the portal cannot call them directly.
+  const isPublicGet = req.method === 'GET' && route === 'consent-request';
+  const isPublicPost = req.method === 'POST' && route === 'process-email-consent';
+  const isPublicRoute = isPublicGet || isPublicPost;
+
+  let ctx: AuthContext | undefined;
+
+  if (!isPublicRoute) {
+    // Protected routes — require a valid client JWT
+    const authResult = await authenticate(req, admin, corsHeaders);
+    if (authResult instanceof Response) {
+      return authResult;
+    }
+    ctx = authResult as AuthContext;
+  }
+
   try {
     // GET routes
     if (req.method === 'GET') {
+      // Public bridge: email-based consent request lookup (CRM RPC)
+      if (route === 'consent-request') {
+        return await handleConsentRequest(crmAdmin, req, corsHeaders);
+      }
+
+      // Protected routes — require an authenticated client context
+      if (!ctx) {
+        return jsonError(401, 'Authentication required', corsHeaders);
+      }
+
       // Handle /quotes/:id and /invoices/:id (must check before switch since /quotes/:id would route='id')
       if (route === 'quotes' && path.includes('/quotes/')) {
         const id = path.split('/quotes/')[1];
@@ -1108,6 +1308,16 @@ serve(async (req: Request) => {
 
     // POST routes
     if (req.method === 'POST') {
+      // Public bridge: accept/reject email-based consent (CRM RPC)
+      if (route === 'process-email-consent') {
+        return await handleProcessEmailConsent(crmAdmin, req, corsHeaders);
+      }
+
+      // Protected routes — require an authenticated client context
+      if (!ctx) {
+        return jsonError(401, 'Authentication required', corsHeaders);
+      }
+
       switch (route) {
         case 'consents':
           return await handleConsents(admin, ctx, req, corsHeaders);
