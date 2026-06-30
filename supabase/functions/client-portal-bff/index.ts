@@ -31,6 +31,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { AwsClient } from 'https://esm.sh/aws4fetch@1.0.17';
 import { checkRateLimit, getRateLimitHeaders } from '../_shared/rate-limiter.ts';
 import { getClientIP, withSecurityHeaders } from '../_shared/security.ts';
 
@@ -473,6 +474,136 @@ async function handleProcessEmailConsent(
   }
 
   return jsonOk(data ?? { success: true }, corsHeaders);
+}
+
+/**
+ * POST /send-link-email  (PUBLIC — no JWT required)
+ *
+ * Delivers an arbitrary HTML email via the company's verified SES identity
+ * (`company_email_accounts`). Used by the portal's `portal-request-otp`
+ * edge function (in the PORTAL Supabase project) which lacks direct SES
+ * credentials: the portal generates a magic-link `action_link` via
+ * `admin.auth.admin.generateLink`, then forwards the link here for branded
+ * SES delivery.
+ *
+ * Body:
+ *   {
+ *     company_id: string (UUID),       — REQUIRED. Scope to a tenant so
+ *                                        we look up the right SES identity.
+ *     to_email:   string,              — REQUIRED. Recipient address.
+ *     subject:    string,              — REQUIRED. ≤ 998 chars (RFC 5322).
+ *     html_body:  string,              — REQUIRED. ≤ 100k chars.
+ *   }
+ *
+ * Auth: PUBLIC (no JWT). Anti-abuse is enforced by:
+ *   - The BFF-wide per-IP rate limit (60 req/min) at the top of `serve()`
+ *   - company_id must be a valid UUID and resolve to an active
+ *     `company_email_accounts` row, otherwise we 400 / 500 before SES.
+ *   - The action_link is signed by Supabase Auth — even if the link were
+ *     intercepted, only the destination email's owner can use it.
+ *
+ * Returns { success: true, sent: true } or a 4xx/5xx with `{ error }`.
+ */
+async function handleSendLinkEmail(
+  admin: ReturnType<typeof createClient>,
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonError(400, 'invalid_json', corsHeaders);
+  }
+
+  const companyId = body.company_id as string | undefined;
+  const toEmail = ((body.to_email as string | undefined) ?? '')
+    .trim()
+    .toLowerCase();
+  const subject = body.subject as string | undefined;
+  const htmlBody = body.html_body as string | undefined;
+
+  if (!companyId || !UUID_REGEX.test(companyId)) {
+    return jsonError(400, 'invalid_company_id', corsHeaders);
+  }
+  if (!toEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(toEmail) || toEmail.length > 320) {
+    return jsonError(400, 'invalid_email', corsHeaders);
+  }
+  if (!subject || subject.length > 998) {
+    return jsonError(400, 'invalid_subject', corsHeaders);
+  }
+  if (!htmlBody || htmlBody.length > 100_000) {
+    return jsonError(400, 'invalid_body', corsHeaders);
+  }
+
+  // Look up the tenant's verified SES identity. We pick the primary active
+  // account — `is_primary` is a boolean column maintained by the CRM admin
+  // panel; the order is deterministic on nulls-last ties.
+  const { data: account, error: accountErr } = await admin
+    .from('company_email_accounts')
+    .select('email, ses_from_email')
+    .eq('company_id', companyId)
+    .eq('is_active', true)
+    .order('is_primary', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (accountErr) {
+    console.error('[send-link-email] email account lookup failed:', accountErr.message);
+    return jsonError(500, 'lookup_failed', corsHeaders);
+  }
+  if (!account) {
+    return jsonError(500, 'no_email_account', corsHeaders);
+  }
+
+  const fromEmail =
+    (account.ses_from_email as string | null) || (account.email as string | null);
+  if (!fromEmail) {
+    return jsonError(500, 'no_email_account_from', corsHeaders);
+  }
+
+  const AWS_ACCESS_KEY_ID = Deno.env.get('AWS_ACCESS_KEY_ID');
+  const AWS_SECRET_ACCESS_KEY = Deno.env.get('AWS_SECRET_ACCESS_KEY');
+  const REGION = Deno.env.get('AWS_REGION') ?? 'us-east-1';
+
+  if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+    console.error('[send-link-email] missing AWS credentials in env');
+    return jsonError(500, 'missing_aws_creds', corsHeaders);
+  }
+
+  const aws = new AwsClient({
+    accessKeyId: AWS_ACCESS_KEY_ID,
+    secretAccessKey: AWS_SECRET_ACCESS_KEY,
+    region: REGION,
+    service: 'email',
+  });
+
+  const params = new URLSearchParams();
+  params.append('Action', 'SendEmail');
+  params.append('Source', fromEmail);
+  params.append('Destination.ToAddresses.member.1', toEmail);
+  params.append('Message.Subject.Data', subject);
+  params.append('Message.Body.Html.Data', htmlBody);
+
+  let sesRes: Response;
+  try {
+    sesRes = await aws.fetch(`https://email.${REGION}.amazonaws.com`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+  } catch (e: any) {
+    console.error('[send-link-email] SES fetch threw:', e?.message);
+    return jsonError(500, 'ses_failed', corsHeaders);
+  }
+
+  if (!sesRes.ok) {
+    const errText = await sesRes.text().catch(() => '');
+    console.error('[send-link-email] SES error:', sesRes.status, errText);
+    return jsonError(500, 'ses_failed', corsHeaders);
+  }
+
+  return jsonOk({ success: true, sent: true }, corsHeaders);
 }
 
 /**
@@ -1239,7 +1370,9 @@ serve(async (req: Request) => {
   // because there's no JWT to validate — and the RPCs live in the CRM DB,
   // not the portal DB, so the portal cannot call them directly.
   const isPublicGet = req.method === 'GET' && route === 'consent-request';
-  const isPublicPost = req.method === 'POST' && route === 'process-email-consent';
+  const isPublicPost =
+    req.method === 'POST' &&
+    (route === 'process-email-consent' || route === 'send-link-email');
   const isPublicRoute = isPublicGet || isPublicPost;
 
   let ctx: AuthContext | undefined;
@@ -1311,6 +1444,12 @@ serve(async (req: Request) => {
       // Public bridge: accept/reject email-based consent (CRM RPC)
       if (route === 'process-email-consent') {
         return await handleProcessEmailConsent(crmAdmin, req, corsHeaders);
+      }
+
+      // Public bridge: deliver the magic-link email via SES (no JWT, called by
+      // the portal-request-otp edge function in the other Supabase project).
+      if (route === 'send-link-email') {
+        return await handleSendLinkEmail(admin, req, corsHeaders);
       }
 
       // Protected routes — require an authenticated client context

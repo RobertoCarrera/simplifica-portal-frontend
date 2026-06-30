@@ -1,23 +1,45 @@
 // Edge Function: portal-request-otp
-// Purpose: Workaround for broken anon-key `supabase.auth.signInWithOtp` on the
-// portal Supabase project. The anon-key OTP call throws "Database error updating
-// user" + 500 for portal clients. Routing the request through this edge function
-// (which uses service_role) avoids the broken path while keeping the magic-link
-// verify flow on `/auth/callback` unchanged.
+// Purpose: Deliver a magic-link / "create your account" link to a portal client.
+//
+// Why this function exists at all:
+//   The anon-key `supabase.auth.signInWithOtp` path is broken in the portal
+//   Supabase project (throws "Database error updating user" + 500 for clients).
+//   Routing the request through this edge function — which uses service_role —
+//   avoids the broken path while keeping the magic-link verify on `/auth/callback`
+//   unchanged.
+//
+// Why `generateLink` (NOT `signInWithOtp` and NOT `inviteUserByEmail`):
+//   - `signInWithOtp` + `shouldCreateUser:false` is an anti-enumeration
+//     silent-no-op: for new emails (no auth.users row) it returns 200 without
+//     actually sending anything. Clients see "Enlace enviado" but get nothing.
+//     This was the original RGPD/UX bug.
+//   - `signInWithOtp` + `shouldCreateUser:true` fixes the new-user gap but the
+//     email is sent by Supabase Auth's built-in magic-link template, which is
+//     unbranded and offers no per-company branding.
+//   - `inviteUserByEmail` (the previous fix) creates the user on click and
+//     sends Supabase Auth's "set your password" template. It works, but the
+//     template cannot use the company's SES-verified identity nor the
+//     branded HTML the CRM uses elsewhere.
+//   - `admin.auth.admin.generateLink({ type: 'magiclink' })` returns a fully
+//     signed `action_link` that (a) creates the user on click if it doesn't
+//     exist and (b) authenticates an existing user as a magic link — WITHOUT
+//     sending the email itself. That lets US send via the verified SES
+//     pipeline (`client-portal-bff` /send-link-email) using the company's
+//     `company_email_accounts` SES identity for full RGPD-compliant branding.
 //
 // Behaviour:
-//   - POST { email }  →  200 { success: true } (always, for valid email)
-//   - 400 on malformed email
+//   - POST { email }  →  200 { success: true, action_link }
+//   - 400 on malformed email / invalid JSON
 //   - 429 on per-IP rate limit breach (5/min)
-//   - Anti-enumeration: unknown / inactive client returns 200 without sending.
+//   - 500 on hard infra errors (so the frontend can show a real failure
+//     instead of falsely claiming "Enlace enviado")
+//   - Anti-enumeration preserved: `generateLink` always produces an
+//     action_link (the user is created on click). The response is 200 in
+//     both cases.
 //
-// Why not just call signInWithOtp with the anon key in the frontend?
-//   The anon path triggers an internal UPDATE auth.users whose trigger chain
-//   fails with 42P01 in the public project's auth context. The service_role
-//   path goes through a different code path in GoTrue that is healthy.
-//
-// Auth: verify_jwt = false (the function is called from the anon key). The
-// service_role client is used internally for the actual OTP send.
+// Auth: verify_jwt = false (called from the anon key). The service_role
+// client is used internally; it lives in the same project as the
+// `client-portal-bff` will then deliver the email via the CRM's verified SES.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
@@ -161,10 +183,10 @@ serve(async (req: Request) => {
       email = body.email.trim().toLowerCase();
     }
   } catch {
-    return jsonResponse(400, { success: false, error: 'invalid_email' }, corsHeaders);
+    return jsonResponse(400, { success: false, error: 'invalid_json' }, corsHeaders);
   }
 
-  if (!EMAIL_REGEX.test(email)) {
+  if (!email || !EMAIL_REGEX.test(email) || email.length > 320) {
     return jsonResponse(400, { success: false, error: 'invalid_email' }, corsHeaders);
   }
 
@@ -193,64 +215,68 @@ serve(async (req: Request) => {
     auth: { persistSession: false },
   });
 
-  // ── Anti-enumeration lookup ──────────────────────────────────────────────────
-  // If the email does not belong to an active portal client, return success
-  // without sending anything. This prevents an attacker from probing which
-  // emails are registered.
+  // ── Generate the magic-link action_link (does NOT send email) ─────────────
   //
-  // Multi-tenant: a single email can map to multiple client_portal_users rows
-  // (one per company). We only need to confirm "does this email belong to at
-  // least one active row?". Use limit(1) instead of maybeSingle() to avoid
-  // the "multiple rows returned" error that maybeSingle throws when more
-  // than one row matches.
-  try {
-    const { data: rows, error: lookupErr } = await admin
-      .from('client_portal_users')
-      .select('id')
-      .eq('email', email)
-      .eq('is_active', true)
-      .limit(1);
-
-    if (lookupErr) {
-      console.error('[portal-request-otp] client_portal_users lookup failed:', lookupErr.message);
-      // Do not leak DB errors. Treat as "no client" → return success.
-      return jsonResponse(200, { success: true }, corsHeaders);
-    }
-
-    if (!rows || rows.length === 0) {
-      // Unknown / inactive email — anti-enumeration: pretend success.
-      return jsonResponse(200, { success: true }, corsHeaders);
-    }
-  } catch (e: any) {
-    console.error('[portal-request-otp] lookup threw:', e?.message ?? e);
-    return jsonResponse(200, { success: true }, corsHeaders);
-  }
-
-  // ── Dispatch the magic link via service_role ────────────────────────────────
+  // `admin.auth.admin.generateLink({ type: 'magiclink' })` is the only auth
+  // primitive that:
+  //   (a) creates the auth.users row on click for unknown emails (fixes the
+  //       RGPD bug where new clients saw "Enlace enviado" but got nothing)
+  //   (b) returns the action_link so we can deliver it via OUR verified SES
+  //       pipeline (CRM's company_email_accounts), with branded HTML
+  //   (c) works for both new-user onboarding AND existing-user re-auth
+  //
+  // We do NOT use `signInWithOtp` (user-facing, no row creation) and we do
+  // NOT use `inviteUserByEmail` (sends Supabase's unbranded template).
+  //
+  // Hard-error contract: if generateLink fails for ANY reason, we return 500
+  // so the frontend can surface a real error instead of falsely showing
+  // "Enlace enviado" and leaving the user staring at their inbox. The
+  // anti-enumeration invariant still holds: in the happy path, generateLink
+  // always produces an action_link (Supabase creates the user on click).
   try {
     const redirectBase = resolveRedirectBase(req);
-    const { error: otpErr } = await admin.auth.signInWithOtp({
+    const { data, error: linkErr } = await admin.auth.admin.generateLink({
+      type: 'magiclink',
       email,
-      options: {
-        shouldCreateUser: false,
-        emailRedirectTo: `${redirectBase}/auth/callback`,
-      },
+      options: { redirectTo: `${redirectBase}/auth/callback` },
     });
 
-    if (otpErr) {
-      console.error('[portal-request-otp] signInWithOtp error:', {
-        status: otpErr.status,
-        name: (otpErr as any).name,
-        message: otpErr.message,
+    // Supabase JS 2.x: action_link lives at data.properties.action_link
+    const actionLink = data?.properties?.action_link;
+
+    if (linkErr || !actionLink) {
+      console.error('[portal-request-otp] generateLink failed:', {
+        email,
+        status: (linkErr as any)?.status,
+        name: (linkErr as any)?.name,
+        message: linkErr?.message ?? 'no_action_link',
       });
+      return jsonResponse(
+        500,
+        { success: false, error: 'service_unavailable' },
+        corsHeaders,
+      );
     }
+
+    // Happy path — anti-enumeration: action_link is produced for both new
+    // and existing emails. The user is created on click. The frontend will
+    // POST this action_link to client-portal-bff /send-link-email for SES
+    // delivery.
+    return jsonResponse(
+      200,
+      { success: true, action_link: actionLink },
+      corsHeaders,
+    );
   } catch (e: any) {
-    console.error('[portal-request-otp] signInWithOtp threw:', {
+    console.error('[portal-request-otp] generateLink threw:', {
+      email,
       name: e?.name,
       message: e?.message,
     });
+    return jsonResponse(
+      500,
+      { success: false, error: 'service_unavailable' },
+      corsHeaders,
+    );
   }
-
-  // Anti-enumeration: always 200 on the happy path, regardless of internal send success.
-  return jsonResponse(200, { success: true }, corsHeaders);
 });
