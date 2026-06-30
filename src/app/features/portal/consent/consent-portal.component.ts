@@ -167,9 +167,7 @@ interface ConsentChoices {
                     <span>Enviando enlace...</span>
                   } @else {
                     <i class="fas fa-paper-plane"></i>
-                    <span>
-                      {{ requestData()?.has_account ? 'Reenviar enlace de acceso' : 'Crear cuenta y enviar enlace' }}
-                    </span>
+                    <span>Recibir enlace de acceso</span>
                   }
                 </button>
               } @else {
@@ -545,7 +543,12 @@ export class ConsentPortalComponent implements OnInit, OnDestroy {
     this.magicLinkError.set(null);
 
     try {
-      const result = await this.authService.loginWithOTP(email);
+      // Use the 2-step flow (portal-request-otp → BFF /send-link-email) that
+      // delivers via the company's verified SES identity and creates the
+      // user on click for new emails. We pass `email` explicitly because
+      // the user isn't logged in at this point — the service's `email()`
+      // accessor reads from the Supabase session and would be empty.
+      const result = await this.authService.requestAccountLink(email);
       if (!result.success) {
         this.magicLinkError.set(result.error ?? 'No se pudo enviar el enlace.');
         return;

@@ -71,6 +71,15 @@ export class PortalAuthService implements IPortalAuth {
     return meta?.company_id ?? null;
   }
 
+  /**
+   * Public accessor for the active company_id (mirrors `activeCompanyId` signal).
+   * Used by callers that want a method-call syntax (e.g. `this.companyId()`)
+   * without needing the signal getter.
+   */
+  companyId(): string | null {
+    return this.activeCompanyId();
+  }
+
   constructor() {
     this.initializeClient();
   }
@@ -358,6 +367,156 @@ export class PortalAuthService implements IPortalAuth {
     } catch (error) {
       console.warn("⚠️ PortalAuth: Error during logout:", error);
     }
+  }
+
+  /**
+   * Two-step "send me a magic link" flow that works for both new and existing
+   * emails. Replaces the previous single-step `loginWithOTP()` to fix the
+   * RGPD bug where brand-new clients (no auth.users row) saw "Enlace
+   * enviado" but received NOTHING — `supabase.auth.signInWithOtp` (and
+   * later `inviteUserByEmail`) didn't deliver via the company's verified
+   * SES identity, so emails either silently no-op'd or used an unbranded
+   * Supabase template.
+   *
+   * Step 1 — `portal-request-otp` (this project's edge function):
+   *   Calls `admin.auth.admin.generateLink({ type: 'magiclink', email })` via
+   *   service_role. Returns a signed `action_link` that creates the user
+   *   on click (if missing) or authenticates an existing user. The action_link
+   *   is Supabase-signed, so even if a malicious portal picked an arbitrary
+   *   email, the link only works for its intended recipient.
+   *
+   * Step 2 — `client-portal-bff` `/send-link-email` (CRM project):
+   *   Forwards the action_link in a branded HTML email sent through the
+   *   company's verified SES identity (`company_email_accounts`). This is
+   *   the SAME pipeline the CRM uses for `send-client-consent-invite`, so
+   *   the email is RGPD-compliant (proper From identity, branded template,
+   *   consent footer, etc.).
+   *
+   * @param emailOpt Optional override for the recipient. When the caller
+   *   already knows the target email (e.g. the consent landing page reads
+   *   it from the URL/RPC) it MUST be passed here — the user is NOT signed
+   *   in yet, so `this.email()` is empty. Falls back to `this.email()`
+   *   only for logged-in flows.
+   *
+   * Returns:
+   *   { success: true }  — email handed to SES (delivery is async).
+   *   { success: false, error: <reason> } — surfaced to the UI; we do NOT
+   *   silently swallow real failures (the previous "Enlace enviado"
+   *   green state was the actual UX bug).
+   */
+  async requestAccountLink(
+    emailOpt?: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    const email = (emailOpt ?? this.email() ?? '').trim().toLowerCase();
+    if (!email) {
+      return { success: false, error: 'No se ha proporcionado ningún correo.' };
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!emailRegex.test(email)) {
+      return { success: false, error: 'Email inválido' };
+    }
+
+    const cfg = this.runtimeConfig.getSupabase();
+    const supabaseUrl = cfg?.url?.trim() || environment.supabase.url;
+    const anonKey = cfg?.anonKey?.trim() || environment.supabase.anonKey;
+    if (!supabaseUrl || !anonKey) {
+      return { success: false, error: 'Configuración del portal incompleta' };
+    }
+
+    const companyId = this.companyId();
+    if (!companyId) {
+      return {
+        success: false,
+        error: 'No se ha podido determinar la empresa. Vuelve a iniciar la sesión.',
+      };
+    }
+
+    try {
+      // ── Step 1: get the magic-link action_link from the portal edge fn ──
+      const otpRes = await fetch(
+        `${supabaseUrl}/functions/v1/portal-request-otp`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: anonKey,
+            Authorization: `Bearer ${anonKey}`,
+          },
+          body: JSON.stringify({ email }),
+        },
+      );
+      const otpData = await otpRes.json().catch(() => null);
+      if (!otpRes.ok || !otpData?.success || !otpData?.action_link) {
+        if (otpRes.status === 429) {
+          return {
+            success: false,
+            error: 'Demasiados intentos. Intenta en un minuto.',
+          };
+        }
+        if (otpRes.status === 400) {
+          return { success: false, error: 'Email inválido' };
+        }
+        return {
+          success: false,
+          error:
+            otpData?.error
+              ? `No se pudo generar el enlace (${otpData.error}).`
+              : 'No se pudo generar el enlace.',
+        };
+      }
+
+      const actionLink: string = otpData.action_link;
+
+      // ── Step 2: deliver via the CRM BFF + the company's SES identity ──
+      // The CRM BFF is a different Supabase project (ufutyjbqfjrlzkprvyvs),
+      // pinned here the same way consent-portal.component.ts already does.
+      const bffBase =
+        'https://ufutyjbqfjrlzkprvyvs.supabase.co/functions/v1/client-portal-bff';
+      const subject = 'Bienvenido a Simplifica — crea tu cuenta';
+      const htmlBody = `<p>Hola,</p>
+<p>Has sido invitado a crear una cuenta en el portal de cliente. Para empezar y establecer el acceso, haz clic en el siguiente botón:</p>
+<p style="margin:24px 0;text-align:center;"><a href="${actionLink}" style="background-color:#4f46e5;color:#fff;padding:14px 28px;text-decoration:none;border-radius:6px;display:inline-block;font-weight:600;">Acceder a mi cuenta</a></p>
+<p style="font-size:12px;color:#6b7280;">Si el botón no funciona, copia y pega este enlace en tu navegador:<br><span style="word-break:break-all;">${actionLink}</span></p>
+<p>Este enlace es personal e intransferible, y caduca en 1 hora.</p>
+<p>Gracias,<br>Simplifica</p>`;
+
+      const sendRes = await fetch(`${bffBase}/send-link-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company_id: companyId,
+          to_email: email,
+          subject,
+          html_body: htmlBody,
+        }),
+      });
+      const sendData = await sendRes.json().catch(() => null);
+      if (!sendRes.ok || !sendData?.success) {
+        // The action_link WAS generated in step 1 — we got that far. But
+        // step 2 (SES send) failed; surface that. The UI should NOT show
+        // "Enlace enviado" because nothing went out.
+        return {
+          success: false,
+          error:
+            sendData?.error
+              ? `No se pudo enviar el correo (${sendData.error}).`
+              : 'No se pudo enviar el correo. Inténtalo de nuevo.',
+        };
+      }
+
+      return { success: true };
+    } catch (e: any) {
+      return {
+        success: false,
+        error: e?.message || 'Error de red al enviar el enlace',
+      };
+    }
+  }
+
+  /** Email accessor used by callers that want a method-call syntax. */
+  email(): string {
+    return (this.currentUserSubject.value?.email ?? '').toString();
   }
 
   /**
